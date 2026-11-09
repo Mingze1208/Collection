@@ -33,6 +33,9 @@ namespace Collection.EditorTools
         private const string SettingsV2Path = DataFolder + "/SO_Ripple_V2.asset";
         private const string NarrativePath = DataFolder + "/SO_Narrative_Ch1.asset";
         private const string WorldTextsPath = DataFolder + "/SO_WorldTexts_Ch1.asset";
+        private const string WorldTextsPath2 = DataFolder + "/SO_WorldTexts_Ch2.asset";
+        private const string NarrativePath2 = DataFolder + "/SO_Narrative_Ch2.asset";
+        private const string Level02Path = "Assets/_Project/Scenes/SC_Level02.unity";
         private const string FontAssetPath = "Assets/_Project/Art/Font/font1716_TMP.asset";
 
         // 首段叙事（hook）：黑暗 → 出声显形 → 唱歌的来处 → “但是”
@@ -135,9 +138,46 @@ namespace Collection.EditorTools
                     new Vector2(55f, -1.25f),
                     new Vector2(95f, 1.0f),
                 },
-                narrative: EnsureNarrativeChapter1(),
-                worldTexts: EnsureWorldTextsChapter1(),
+                narrativePath: NarrativePath,
+                worldTextsPath: WorldTextsPath,
                 trapPosition: new Vector2(74f, -1.25f));
+        }
+
+        // 第二章：200 m 直廊 + 1.5 m 缺口（敌人堵在缺口里，必须用泪滴引开）
+        private static readonly (string Name, Vector2 Center, Vector2 Size)[] Level02Walls =
+        {
+            ("Wall_Top", new Vector2(100f, 2.0f), new Vector2(200.5f, 0.5f)),
+            ("Wall_Bottom", new Vector2(100f, -2.0f), new Vector2(200.5f, 0.5f)),
+            ("Wall_Left", new Vector2(-0.25f, 0f), new Vector2(0.5f, 4.5f)),
+            ("Wall_Right", new Vector2(200.5f, 0f), new Vector2(0.5f, 4.5f)),
+            // 缺口：x∈[96,98]，只留 y∈[-0.75,0.75] 的 1.5 m
+            ("Gate_Top", new Vector2(97f, 1.25f), new Vector2(2f, 1.0f)),
+            ("Gate_Bottom", new Vector2(97f, -1.25f), new Vector2(2f, 1.0f)),
+        };
+
+        [MenuItem("Collection/Spike/Rebuild SC_Level02 Scene", priority = 4)]
+        public static void RebuildLevel02Scene()
+        {
+            EnsureWorldTextsChapter2();
+            EnsureNarrativeChapter2();
+
+            BuildScene(Level02Path, new Vector2(2f, 0f), 3f, Level02Walls,
+                new Vector2(2f, 0f), new[]
+                {
+                    new Vector2(50f, 0f),   // 中段敌人
+                    new Vector2(97.5f, 0f), // 缺口守卫：堵在 1.5 m 缺口里（离缺口口 1.3 m，玩家可贴边投掷）
+                }, "Level02",
+                followCamera: true, goalPosition: new Vector2(198f, 0f),
+                checkpointPositions: new[]
+                {
+                    new Vector2(30f, 1.2f),
+                    new Vector2(120f, -1.2f),
+                },
+                narrativePath: NarrativePath2,
+                worldTextsPath: WorldTextsPath2,
+                trapPosition: new Vector2(140f, 0.9f));
+
+            Debug.Log("[Level02] 已生成：200 m 直廊，缺口 x∈[96,98] 仅 1.5 m 高，敌人堵在 (97,0)");
         }
 
         private const float GridCell = 0.5f;
@@ -325,8 +365,8 @@ namespace Collection.EditorTools
         private static void BuildScene(string scenePath, Vector2 cameraPosition, float cameraSize,
             (string Name, Vector2 Center, Vector2 Size)[] walls, Vector2 playerSpawn, Vector2[] enemySpawns,
             string worldName, bool followCamera = false, Vector2? goalPosition = null,
-            Vector2[] checkpointPositions = null, NarrativeSettings narrative = null,
-            WorldTextSettings worldTexts = null, Vector2? trapPosition = null)
+            Vector2[] checkpointPositions = null, string narrativePath = null,
+            string worldTextsPath = null, Vector2? trapPosition = null)
         {
             Scene active = EditorSceneManager.GetActiveScene();
             if (active.isDirty)
@@ -384,15 +424,16 @@ namespace Collection.EditorTools
             stepper.Initialize(ripple, settings, worldGo.transform, leftFoot, rightFoot, sprite, material);
             player.Initialize(ripple, stepper);
 
-            // 资产引用可能在构建过程中被 AssetDatabase 重新加载（变成“假 null”），用前按路径重解析
-            if (worldTexts == null) worldTexts = AssetDatabase.LoadAssetAtPath<WorldTextSettings>(WorldTextsPath);
             // T1 泪滴投掷：鼠标瞄准，投掷不发声，落地触发落脚档 burst
             var thrower = playerGo.AddComponent<DropletThrower>();
             thrower.Initialize(player, ripple, settings, circle, material);
 
-            if (worldTexts != null)
+            // 只有显式传入路径的场景才会有世界文本（避免所有场景共用同一份文本）
+            if (!string.IsNullOrEmpty(worldTextsPath))
             {
-                CreateWorldTexts(worldTexts, player, camera);
+                WorldTextSettings worldTexts = AssetDatabase.LoadAssetAtPath<WorldTextSettings>(worldTextsPath);
+                if (worldTexts != null) CreateWorldTexts(worldTexts, player, camera);
+                else Debug.LogError($"[SpikeSceneBuilder] 找不到世界文本资源：{worldTextsPath}");
             }
 
             if (followCamera)
@@ -429,12 +470,17 @@ namespace Collection.EditorTools
                 CreateGoal(goalPosition.Value, player, sprite, material);
             }
 
-            if (narrative == null) narrative = AssetDatabase.LoadAssetAtPath<NarrativeSettings>(NarrativePath);
-            if (narrative != null)
+            // 同理：字幕也只给显式指定的章节
+            if (!string.IsNullOrEmpty(narrativePath))
             {
-                var narrativeGo = new GameObject("Narrative");
-                var intro = narrativeGo.AddComponent<NarrativeIntro>();
-                intro.Initialize(narrative);
+                NarrativeSettings narrative = AssetDatabase.LoadAssetAtPath<NarrativeSettings>(narrativePath);
+                if (narrative != null)
+                {
+                    var narrativeGo = new GameObject("Narrative");
+                    var intro = narrativeGo.AddComponent<NarrativeIntro>();
+                    intro.Initialize(narrative);
+                }
+                else Debug.LogError($"[SpikeSceneBuilder] 找不到叙事资源：{narrativePath}");
             }
 
             if (checkpointPositions != null)
@@ -730,6 +776,96 @@ namespace Collection.EditorTools
 
             var trap = go.AddComponent<VoidTrap>();
             trap.Initialize(player, ripple, visual);
+        }
+
+        /// <summary>第二章世界文本（5 条，约 104 字）。</summary>
+        private static WorldTextSettings EnsureWorldTextsChapter2()
+        {
+            var existing = AssetDatabase.LoadAssetAtPath<WorldTextSettings>(WorldTextsPath2);
+            if (existing != null) return existing;
+
+            var settings = ScriptableObject.CreateInstance<WorldTextSettings>();
+            settings.SetEntries(new[]
+            {
+                new WorldTextSettings.Entry
+                {
+                    TextPosition = new Vector2(20f, 1.4f),
+                    TriggerCenter = new Vector2(20f, 0f),
+                    TriggerSize = new Vector2(4f, 4f),
+                    Width = 7f,
+                    Text = "第二段记忆比第一段<wave>更窄</wave>，也更安静。",
+                },
+                new WorldTextSettings.Entry
+                {
+                    TextPosition = new Vector2(55f, 1.4f),
+                    TriggerCenter = new Vector2(55f, 0f),
+                    TriggerSize = new Vector2(4f, 4f),
+                    Width = 7f,
+                    Text = "你唱得越响，它来得越快；你屏住呼吸，它就找不到你。",
+                },
+                new WorldTextSettings.Entry
+                {
+                    TextPosition = new Vector2(90f, 1.4f),
+                    TriggerCenter = new Vector2(90f, 0f),
+                    TriggerSize = new Vector2(4f, 4f),
+                    Width = 7f,
+                    Text = "它挡在唯一的缺口里——这一次，<color=#7fd4ff>把声音扔到别处</color>。",
+                },
+                new WorldTextSettings.Entry
+                {
+                    TextPosition = new Vector2(130f, 1.4f),
+                    TriggerCenter = new Vector2(130f, 0f),
+                    TriggerSize = new Vector2(4f, 4f),
+                    Width = 7f,
+                    Text = "别回头。它记得你每一次<wave>发声的位置</wave>。",
+                },
+                new WorldTextSettings.Entry
+                {
+                    TextPosition = new Vector2(175f, 1.4f),
+                    TriggerCenter = new Vector2(175f, 0f),
+                    TriggerSize = new Vector2(4f, 4f),
+                    Width = 7f,
+                    Text = "前面那点亮光，是你自己的声音照出来的。",
+                },
+            });
+            AssetDatabase.CreateAsset(settings, WorldTextsPath2);
+            return settings;
+        }
+
+        /// <summary>第二章叙事（5 行，约 60 字）。</summary>
+        private static NarrativeSettings EnsureNarrativeChapter2()
+        {
+            var existing = AssetDatabase.LoadAssetAtPath<NarrativeSettings>(NarrativePath2);
+            if (existing != null) return existing;
+
+            var settings = ScriptableObject.CreateInstance<NarrativeSettings>();
+            AssetDatabase.CreateAsset(settings, NarrativePath2);
+
+            string[] lines =
+            {
+                "这一次，记忆更窄了。",
+                "她听见自己的回声，被折叠成一条走廊。",
+                "有什么东西，一直挡在缺口里。",
+                "她把一滴眼泪，轻轻抛向远处。",
+                "声音落下的地方，不是她站的地方。",
+            };
+
+            var serialized = new SerializedObject(settings);
+            SerializedProperty linesProperty = serialized.FindProperty("_lines");
+            linesProperty.arraySize = lines.Length;
+            for (int i = 0; i < lines.Length; i++)
+            {
+                linesProperty.GetArrayElementAtIndex(i).stringValue = lines[i];
+            }
+
+            serialized.FindProperty("_lineDuration").floatValue = 3f;
+            serialized.FindProperty("_fadeTime").floatValue = 0.4f;
+            serialized.FindProperty("_startDelay").floatValue = 1f;
+            serialized.ApplyModifiedPropertiesWithoutUndo();
+
+            EditorUtility.SetDirty(settings);
+            AssetDatabase.SaveAssets();
+            return settings;
         }
 
         /// <summary>把 SO 里的每条文本生成为世界空间 TMP + 触发区。</summary>

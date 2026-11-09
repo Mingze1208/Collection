@@ -87,6 +87,13 @@ namespace Collection.Runtime.Player
 
         /// <summary>调试/取证：代替 Shift 键强制屏息。仅编辑器可用。</summary>
         public void SetDebugBreath(bool hold) => _debugBreath = hold;
+
+        /// <summary>调试/取证：立刻把呼吸补满（只用于验证几何可通过性）。仅编辑器可用。</summary>
+        public void DebugRefillBreath()
+        {
+            _breath = BreathDuration;
+            _breathLocked = false;
+        }
 #endif
 
         /// <summary>GameOver 期间关掉移动与发声输入。</summary>
