@@ -37,6 +37,7 @@ namespace Collection.EditorTools
         private const string NarrativePath2 = DataFolder + "/SO_Narrative_Ch2.asset";
         private const string Level02Path = "Assets/_Project/Scenes/SC_Level02.unity";
         private const string Level03Path = "Assets/_Project/Scenes/SC_Level03.unity";
+        private const string UiWindowPath = "Assets/_Project/Prefabs/P_UiWindow.prefab";
         private const string WorldTextsPath3 = DataFolder + "/SO_WorldTexts_Ch3.asset";
         private const string NarrativePath3 = DataFolder + "/SO_Narrative_Ch3.asset";
         private const string FontAssetPath = "Assets/_Project/Art/Font/font1716_TMP.asset";
@@ -143,7 +144,9 @@ namespace Collection.EditorTools
                 },
                 narrativePath: NarrativePath,
                 worldTextsPath: WorldTextsPath,
-                trapPosition: new Vector2(74f, -1.25f));
+                trapPosition: new Vector2(74f, -1.25f),
+                chapterTitle: "第一章",
+                nextScene: "SC_Level02");
         }
 
         // 第二章：200 m 直廊 + 1.5 m 缺口（敌人堵在缺口里，必须用泪滴引开）
@@ -178,7 +181,9 @@ namespace Collection.EditorTools
                 },
                 narrativePath: NarrativePath2,
                 worldTextsPath: WorldTextsPath2,
-                trapPosition: new Vector2(140f, 0.9f));
+                trapPosition: new Vector2(140f, 0.9f),
+                chapterTitle: "第二章",
+                nextScene: "SC_Level03");
 
             Debug.Log("[Level02] 已生成：200 m 直廊，缺口 x∈[96,98] 仅 1.5 m 高，敌人堵在 (97,0)");
         }
@@ -201,6 +206,60 @@ namespace Collection.EditorTools
             "",
             "按 R 重看结局",
         };
+
+        private const string MainMenuPath = "Assets/_Project/Scenes/SC_MainMenu.unity";
+
+        [MenuItem("Collection/Spike/Rebuild SC_MainMenu Scene", priority = 0)]
+        public static void RebuildMainMenuScene()
+        {
+            Scene active = EditorSceneManager.GetActiveScene();
+            if (active.isDirty)
+            {
+                Debug.LogError("[SpikeSceneBuilder] 当前场景有未保存改动，已中止。");
+                return;
+            }
+
+            EnsureFolder("Assets/_Project/Scenes");
+            Scene scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
+
+            Camera camera = CreateCamera(new Vector2(0f, 0f), 5f);
+            camera.backgroundColor = new Color(0.02f, 0.02f, 0.03f, 1f);
+
+            UiWindow window = CreateUiWindow();
+            EnsureEventSystem();
+
+            if (window != null)
+            {
+                var menuGo = new GameObject("MainMenu");
+                var menu = menuGo.AddComponent<MainMenu>();
+                menu.Initialize(window, "SC_Level01");
+                window.Show("涟漪", "开始游戏（Enter）", null, "退出", null);
+            }
+
+            EditorSceneManager.MarkSceneDirty(scene);
+            if (!EditorSceneManager.SaveScene(scene, MainMenuPath))
+            {
+                Debug.LogError($"[SpikeSceneBuilder] 保存场景失败：{MainMenuPath}");
+                return;
+            }
+
+            AssetDatabase.SaveAssets();
+            Debug.Log($"[SpikeSceneBuilder] 已生成 {MainMenuPath}");
+        }
+
+        [MenuItem("Collection/Spike/Rebuild Build Settings", priority = 6)]
+        public static void RebuildBuildSettings()
+        {
+            EditorBuildSettings.scenes = new[]
+            {
+                new EditorBuildSettingsScene(MainMenuPath, true),
+                new EditorBuildSettingsScene(Level01Path, true),
+                new EditorBuildSettingsScene(Level02Path, true),
+                new EditorBuildSettingsScene(Level03Path, true),
+            };
+
+            Debug.Log("[BuildSettings] 已写入 4 个场景：SC_MainMenu / SC_Level01 / SC_Level02 / SC_Level03");
+        }
 
         [MenuItem("Collection/Spike/Rebuild SC_Level03 Scene", priority = 5)]
         public static void RebuildLevel03Scene()
@@ -226,7 +285,8 @@ namespace Collection.EditorTools
                 worldTextsPath: WorldTextsPath3,
                 trapPosition: new Vector2(80f, 0.9f),
                 chapterTitle: "第三章",
-                endingLines: Level03EndingLines);
+                endingLines: Level03EndingLines,
+                nextScene: string.Empty);
 
             Debug.Log("[Level03] 已生成：200 m 直廊，3 个敌人，结局画面 + R 重看");
         }
@@ -365,7 +425,7 @@ namespace Collection.EditorTools
         }
 
         private static void CreateGoal(Vector2 position, PlayerController player, Sprite sprite, Material material,
-            string chapterTitle = null, string[] endingLines = null)
+            string chapterTitle = null, string[] endingLines = null, UiWindow window = null, string nextScene = null)
         {
             var go = new GameObject("FinishDoor");
             go.transform.position = new Vector3(position.x, position.y, 0f);
@@ -386,14 +446,16 @@ namespace Collection.EditorTools
             trigger.size = new Vector2(1.6f, 2.4f);
 
             var goal = go.AddComponent<ChapterGoal>();
-            goal.Initialize(player, chapterTitle);
 
             // 第三章：结局画面（黑场逐行 + R 重看）
+            EndingScreen ending = null;
             if (endingLines != null && endingLines.Length > 0)
             {
-                var ending = go.AddComponent<EndingScreen>();
+                ending = go.AddComponent<EndingScreen>();
                 ending.Initialize(goal, endingLines);
             }
+
+            goal.Initialize(player, chapterTitle, nextScene, window, ending);
         }
 
         private static void CreateCheckpoint(Vector2 position, int index, PlayerController player, SpikeFlow flow,
@@ -426,7 +488,7 @@ namespace Collection.EditorTools
             string worldName, bool followCamera = false, Vector2? goalPosition = null,
             Vector2[] checkpointPositions = null, string narrativePath = null,
             string worldTextsPath = null, Vector2? trapPosition = null,
-            string chapterTitle = null, string[] endingLines = null)
+            string chapterTitle = null, string[] endingLines = null, string nextScene = null)
         {
             Scene active = EditorSceneManager.GetActiveScene();
             if (active.isDirty)
@@ -520,14 +582,19 @@ namespace Collection.EditorTools
                 enemies[i].Initialize(ripple, enemySettings);
             }
 
-            // 失败循环：接触 → GameOver 覆盖层 → 重试回到入口
+            // UI 窗口（prefab 实例，死亡与通关共用）+ 事件系统
+            UiWindow window = CreateUiWindow();
+            EnsureEventSystem();
+
+            // 失败循环：接触 → GameOver 窗口 → 重试回到入口
             var flowGo = new GameObject("GameFlow");
             var flow = flowGo.AddComponent<SpikeFlow>();
             flow.Initialize(player, stepper, enemies, ripple, playerSpawn, enemySpawns);
+            flow.SetWindow(window);
 
             if (goalPosition.HasValue)
             {
-                CreateGoal(goalPosition.Value, player, sprite, material, chapterTitle, endingLines);
+                CreateGoal(goalPosition.Value, player, sprite, material, chapterTitle, endingLines, window, nextScene);
             }
 
             // 同理：字幕也只给显式指定的章节
@@ -812,6 +879,33 @@ namespace Collection.EditorTools
 
             AssetDatabase.CreateAsset(settings, WorldTextsPath);
             return settings;
+        }
+
+        /// <summary>实例化 UI 窗口 prefab（每个场景一个）。</summary>
+        private static UiWindow CreateUiWindow()
+        {
+            var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(UiWindowPath);
+            if (prefab == null)
+            {
+                Debug.LogError($"[SpikeSceneBuilder] 找不到 UI prefab：{UiWindowPath}（先跑 Collection/UI/Rebuild UI Prefab）");
+                return null;
+            }
+
+            var instance = (GameObject)PrefabUtility.InstantiatePrefab(prefab);
+            instance.name = "UiWindow";
+            instance.SetActive(false);
+            return instance.GetComponent<UiWindow>();
+        }
+
+        /// <summary>场景里没有 EventSystem 就补一个（新 Input System 的 UI 模块）。</summary>
+        private static void EnsureEventSystem()
+        {
+            if (Object.FindFirstObjectByType<UnityEngine.EventSystems.EventSystem>() != null) return;
+
+            var go = new GameObject("EventSystem",
+                typeof(UnityEngine.EventSystems.EventSystem),
+                typeof(UnityEngine.InputSystem.UI.InputSystemUIInputModule));
+            go.transform.position = Vector3.zero;
         }
 
         /// <summary>虚无陷阱：踩到脚下发满档声响。</summary>

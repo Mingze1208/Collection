@@ -22,6 +22,7 @@ namespace Collection.Runtime.Flow
         [SerializeField] private FootStepper _stepper;
         [SerializeField] private EnemyController[] _enemies = new EnemyController[0];
         [SerializeField] private RippleSystem _ripple;
+        [SerializeField] private UiWindow _window;
 
         [Header("复活点")]
         [SerializeField] private Vector2 _playerSpawn = new Vector2(-2.5f, -2.5f);
@@ -74,6 +75,13 @@ namespace Collection.Runtime.Flow
                 : 0.55f,
                 _playerRadius + _enemyRadius + 0.02f);
 
+        /// <summary>构建期注入 UI 窗口（prefab 实例）。</summary>
+        public void SetWindow(UiWindow window)
+        {
+            _window = window;
+            if (_window != null) _window.Hide();
+        }
+
         public void Initialize(PlayerController player, FootStepper stepper, EnemyController[] enemies,
             RippleSystem ripple, Vector2 playerSpawn, Vector2[] enemySpawns)
         {
@@ -84,6 +92,11 @@ namespace Collection.Runtime.Flow
             _playerSpawn = playerSpawn;
             _enemySpawns = enemySpawns ?? new Vector2[0];
             _respawnPoint = playerSpawn;
+
+            if (_window != null)
+            {
+                _window.Hide();
+            }
 
             _playerRadius = RadiusOf(player != null ? player.GetComponent<Collider2D>() : null);
             _enemyRadius = RadiusOf(_enemies.Length > 0 && _enemies[0] != null
@@ -147,6 +160,12 @@ namespace Collection.Runtime.Flow
             StopEnemies();
             if (_ripple != null) _ripple.Clear();
 
+            if (_window != null)
+            {
+                _window.Show("GameOver", "重试（Enter）", Retry,
+                    "返回主菜单", _window.LoadMenu);
+            }
+
             string cause = string.IsNullOrEmpty(reason) ? "敌人接触到玩家" : reason;
             Debug.Log(
                 $"[Flow] GameOver #{DeathCount}：{cause}" +
@@ -187,6 +206,8 @@ namespace Collection.Runtime.Flow
             if (_ripple != null) _ripple.Clear();
             ResetEnemies();
 
+            if (_window != null) _window.Hide();
+
             State = SpikeState.Playing;
             RetryCount++;
             RetryCostMs = (Time.realtimeSinceStartup - start) * 1000f;
@@ -216,46 +237,5 @@ namespace Collection.Runtime.Flow
             }
         }
 
-        private void OnGUI()
-        {
-            if (State != SpikeState.GameOver) return;
-
-            GUI.color = new Color(0f, 0f, 0f, 0.72f);
-            GUI.DrawTexture(new Rect(0f, 0f, Screen.width, Screen.height), Texture2D.whiteTexture);
-            GUI.color = Color.white;
-
-            var title = new GUIStyle(GUI.skin.label)
-            {
-                fontSize = 44,
-                alignment = TextAnchor.MiddleCenter,
-                normal = { textColor = new Color(1f, 0.45f, 0.45f) },
-            };
-            var body = new GUIStyle(GUI.skin.label)
-            {
-                fontSize = 20,
-                alignment = TextAnchor.MiddleCenter,
-                normal = { textColor = Color.white },
-            };
-            var hint = new GUIStyle(GUI.skin.label)
-            {
-                fontSize = 14,
-                alignment = TextAnchor.MiddleCenter,
-                normal = { textColor = new Color(0.8f, 0.8f, 0.85f) },
-            };
-
-            float centerY = Screen.height * 0.5f - 90f;
-            GUI.Label(new Rect(0f, centerY, Screen.width, 60f), "GAME OVER", title);
-            GUI.Label(new Rect(0f, centerY + 70f, Screen.width, 30f),
-                $"按 R 重试（回到房间入口）　·　按 Esc 返回主菜单", body);
-            GUI.Label(new Rect(0f, centerY + 110f, Screen.width, 24f),
-                $"已死亡 {DeathCount} 次" +
-                (RetryCostMs >= 0f ? $"　上次重试生效 {RetryCostMs:0.00} ms" : string.Empty),
-                hint);
-
-            if (!string.IsNullOrEmpty(MenuNotice))
-            {
-                GUI.Label(new Rect(0f, centerY + 140f, Screen.width, 24f), MenuNotice, hint);
-            }
-        }
     }
 }

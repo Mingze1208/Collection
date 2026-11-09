@@ -28,6 +28,17 @@ namespace Collection.Runtime.Flow
 
         public int LineCount => _lines.Length;
 
+        /// <summary>所有行都浮现完并停留 1.5 s（用于衔接“章节完成”窗口）。</summary>
+        public bool Finished
+        {
+            get
+            {
+                if (!Showing || _startedAt < 0f) return false;
+                float elapsed = Time.time - _startedAt - _startDelay;
+                return elapsed > _lines.Length * _lineInterval + 1.5f;
+            }
+        }
+
         public void Initialize(ChapterGoal goal, string[] lines)
         {
             _goal = goal;
