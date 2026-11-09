@@ -64,6 +64,17 @@ namespace Collection.Runtime.Player
         /// <summary>按住方向键时的步间隔（s）。</summary>
         public float StepInterval => _settings != null ? _settings.StepInterval : 0.35f;
 
+        /// <summary>屏息静步的步间隔（s）：更慢但完全无声。</summary>
+        public float SilentStepInterval => _settings != null ? _settings.SilentStepInterval : 0.63f;
+
+        /// <summary>当前步速（m/s）：走路 vs 静步。</summary>
+        public float SpeedFor(bool silent)
+        {
+            float interval = silent ? SilentStepInterval : StepInterval;
+            float stepLength = _settings != null ? _settings.StepLength : 0.8f;
+            return stepLength / Mathf.Max(0.01f, interval);
+        }
+
         /// <summary>上一步那只脚当前的颜色（用于验证“变灰”）。</summary>
         public Color GhostFootColor
         {

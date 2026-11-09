@@ -41,6 +41,9 @@ namespace Collection.Runtime.Ripple
         [Tooltip("按住方向键时每步的间隔（s）。")]
         [SerializeField, Min(0.05f)] private float _stepInterval = 0.35f;
 
+        [Tooltip("屏息静步的步间隔（s）：更慢但完全无声。0.63 ≈ 走路的 1.8 倍慢。")]
+        [SerializeField, Min(0.05f)] private float _silentStepInterval = 0.63f;
+
         [Tooltip("上一步的残影从本体色渐变到灰色所需时间（s）。")]
         [SerializeField, Min(0.1f)] private float _ghostFadeTime = 1.2f;
 
@@ -77,6 +80,7 @@ namespace Collection.Runtime.Ripple
 
         public float StepLength => _stepLength;
         public float StepInterval => _stepInterval;
+        public float SilentStepInterval => _silentStepInterval;
         public float GhostFadeTime => _ghostFadeTime;
         public float FootSize => _footSize;
         public float BreathDuration => _breathDuration;

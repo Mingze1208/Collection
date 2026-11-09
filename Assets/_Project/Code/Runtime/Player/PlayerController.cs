@@ -141,15 +141,18 @@ namespace Collection.Runtime.Player
 
             if (!directionChanged && _stepTimer > 0f) return;
 
+            // 屏息静步更慢：无声是有代价的
+            float interval = IsHoldingBreath ? _stepper.SilentStepInterval : _stepper.StepInterval;
+
             if (_stepper.TryStep(direction, IsHoldingBreath))
             {
                 _lastStepDirection = direction;
-                _stepTimer = _stepper.StepInterval;
+                _stepTimer = interval;
             }
             else
             {
                 // 被墙挡住：按步间隔重试，避免每帧刷计数
-                _stepTimer = _stepper.StepInterval;
+                _stepTimer = interval;
             }
         }
 

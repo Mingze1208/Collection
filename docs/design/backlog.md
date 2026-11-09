@@ -35,6 +35,7 @@
 | 16 | 手柄 / 移动端输入 | 平台 | P3 | 当前只支持键鼠 |
 | 17 | 设置菜单（音量 / 亮度 / 文字速度） | 体验 | P3 | 世界文本速度目前只能改 SO |
 | 18 | 多语言 | 内容 | P3 | 文案现在直接写在 SO 里 |
+| 19 | `ProjectSettings.asset` 的 `preloadedAssets` 偶发被清空 | 2026-11-09 发现 | P2 | InputSystem_Actions 的引用丢失。原因未复现（重编译/重建场景/进出 Play 都没触发），推测是某次 PlayerSettings 保存时 Input System 的 project-wide actions 恰好为空。**修复**：`git checkout -- ProjectSettings/ProjectSettings.asset`，或 Project Settings → Player → Input System Package → Project-wide Input Actions 重新选 `Assets/InputSystem_Actions.inputactions`。我方代码只用 `Keyboard.current`/`Mouse.current`，运行时不受影响，但会影响以后用 PlayerInput 的构建 |
 
 ## 已清理的技术债（记录一下做过什么）
 
