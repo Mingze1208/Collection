@@ -23,6 +23,16 @@ MonoBehaviour:
     TriggerSize: {x: 4, y: 4}
     Width: 7
     Text: "\u522B\u505C<wave>\u4E0B\u6765</wave>\u2014\u2014<color=#7fd4ff>\u5B83\u542C\u5F97\u89C1</color>\u3002"
+  - TextPosition: {x: 34, y: 1.6}
+    TriggerCenter: {x: 34, y: 0}
+    TriggerSize: {x: 4, y: 4}
+    Width: 7
+    Text: "\u8D8A\u5B89\u9759\uFF0C\u5B83\u8D8A<wave>\u627E\u4E0D\u5230</wave>\u4F60\u3002"
+  - TextPosition: {x: 100, y: 1.6}
+    TriggerCenter: {x: 100, y: 0}
+    TriggerSize: {x: 4, y: 4}
+    Width: 7
+    Text: "<color=#c792ea>\u522B\u8BA9\u5B83</color>\u542C\u89C1\u4F60\u3002"
   _charsPerSecond: 12
   _punctuationPause: 0.15
   _waveEnabled: 1

@@ -20,12 +20,12 @@ namespace Collection.Runtime.Flow
     {
         [SerializeField] private PlayerController _player;
         [SerializeField] private FootStepper _stepper;
-        [SerializeField] private EnemyController _enemy;
+        [SerializeField] private EnemyController[] _enemies = new EnemyController[0];
         [SerializeField] private RippleSystem _ripple;
 
         [Header("复活点")]
         [SerializeField] private Vector2 _playerSpawn = new Vector2(-2.5f, -2.5f);
-        [SerializeField] private Vector2 _enemySpawn = new Vector2(3f, -2f);
+        [SerializeField] private Vector2[] _enemySpawns = new Vector2[0];
 
         public SpikeState State { get; private set; } = SpikeState.Playing;
         public int DeathCount { get; private set; }
@@ -64,23 +64,31 @@ namespace Collection.Runtime.Flow
         private float _playerRadius = 0.3f;
         private float _enemyRadius = 0.3f;
 
+        /// <summary>敌人数量（HUD / 取证用）。</summary>
+        public int EnemyCount => _enemies != null ? _enemies.Length : 0;
+
         /// <summary>实际使用的致命距离：参数值，但绝不会小于两者碰撞体接触距离。</summary>
         public float EffectiveKillDistance =>
-            Mathf.Max(_enemy != null ? _enemy.KillDistance : 0.55f, _playerRadius + _enemyRadius + 0.02f);
+            Mathf.Max(_enemies != null && _enemies.Length > 0 && _enemies[0] != null
+                ? _enemies[0].KillDistance
+                : 0.55f,
+                _playerRadius + _enemyRadius + 0.02f);
 
-        public void Initialize(PlayerController player, FootStepper stepper, EnemyController enemy,
-            RippleSystem ripple, Vector2 playerSpawn, Vector2 enemySpawn)
+        public void Initialize(PlayerController player, FootStepper stepper, EnemyController[] enemies,
+            RippleSystem ripple, Vector2 playerSpawn, Vector2[] enemySpawns)
         {
             _player = player;
             _stepper = stepper;
-            _enemy = enemy;
+            _enemies = enemies ?? new EnemyController[0];
             _ripple = ripple;
             _playerSpawn = playerSpawn;
-            _enemySpawn = enemySpawn;
+            _enemySpawns = enemySpawns ?? new Vector2[0];
             _respawnPoint = playerSpawn;
 
             _playerRadius = RadiusOf(player != null ? player.GetComponent<Collider2D>() : null);
-            _enemyRadius = RadiusOf(enemy != null ? enemy.GetComponent<Collider2D>() : null);
+            _enemyRadius = RadiusOf(_enemies.Length > 0 && _enemies[0] != null
+                ? _enemies[0].GetComponent<Collider2D>()
+                : null);
         }
 
         private static float RadiusOf(Collider2D collider)
@@ -108,12 +116,20 @@ namespace Collection.Runtime.Flow
 
         private void CheckCaught()
         {
-            if (_player == null || _enemy == null) return;
+            if (_player == null) return;
 
-            float distance = Vector2.Distance(_player.transform.position, _enemy.transform.position);
-            if (distance > EffectiveKillDistance) return;
+            Vector2 playerPosition = _player.transform.position;
+            for (int i = 0; i < _enemies.Length; i++)
+            {
+                EnemyController enemy = _enemies[i];
+                if (enemy == null) continue;
 
-            Die(distance);
+                float distance = Vector2.Distance(playerPosition, enemy.transform.position);
+                if (distance > EffectiveKillDistance) continue;
+
+                Die(distance);
+                return;
+            }
         }
 
         public void Die() => Die(-1f);
@@ -128,7 +144,7 @@ namespace Collection.Runtime.Flow
             MenuNotice = string.Empty;
 
             if (_player != null) _player.SetInputEnabled(false);
-            if (_enemy != null) _enemy.Stop();
+            StopEnemies();
             if (_ripple != null) _ripple.Clear();
 
             Debug.Log(
@@ -168,7 +184,7 @@ namespace Collection.Runtime.Flow
 
             if (_stepper != null) _stepper.ResetFeet();
             if (_ripple != null) _ripple.Clear();
-            if (_enemy != null) _enemy.ResetTo(_enemySpawn);
+            ResetEnemies();
 
             State = SpikeState.Playing;
             RetryCount++;
@@ -176,8 +192,27 @@ namespace Collection.Runtime.Flow
 
             Debug.Log(
                 $"[Flow] Retry #{RetryCount}：玩家 → ({_respawnPoint.x:0.00},{_respawnPoint.y:0.00})，" +
-                $"敌人 → ({_enemySpawn.x:0.00},{_enemySpawn.y:0.00})；" +
+                $"敌人 {EnemyCount} 个回到出生点；" +
                 $"覆盖层停留 {OverlayDwellMs:0.0} ms，重试生效 {RetryCostMs:0.00} ms");
+        }
+
+        private void StopEnemies()
+        {
+            foreach (EnemyController enemy in _enemies)
+            {
+                if (enemy != null) enemy.Stop();
+            }
+        }
+
+        private void ResetEnemies()
+        {
+            for (int i = 0; i < _enemies.Length; i++)
+            {
+                if (_enemies[i] == null) continue;
+
+                Vector2 spawn = i < _enemySpawns.Length ? _enemySpawns[i] : _enemies[i].transform.position;
+                _enemies[i].ResetTo(spawn);
+            }
         }
 
         private void OnGUI()

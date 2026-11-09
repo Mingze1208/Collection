@@ -74,7 +74,7 @@ namespace Collection.EditorTools
         public static void RebuildScene()
         {
             BuildScene(ScenePath, new Vector2(0f, 0f), 6.5f, Walls,
-                new Vector2(-2.5f, -2.5f), new Vector2(3f, -2f), "Room");
+                new Vector2(-2.5f, -2.5f), new[] { new Vector2(3f, -2f) }, "Room");
         }
 
         // D2 验收用：3 m 宽、20 m 长的直廊（净宽 3 m，墙厚 0.5 m）
@@ -90,7 +90,7 @@ namespace Collection.EditorTools
         public static void RebuildCorridorScene()
         {
             BuildScene(CorridorPath, new Vector2(-2f, 0f), 3f, CorridorWalls,
-                new Vector2(-4f, 0f), new Vector2(0f, 0f), "Corridor");
+                new Vector2(-4f, 0f), new[] { new Vector2(0f, 0f) }, "Corridor");
         }
 
         // D-4/D-5：第一章连续通路（净宽 3.5 m，纵向起伏 ±1.5 m，全程约 133 m）
@@ -127,7 +127,7 @@ namespace Collection.EditorTools
                 : $"[Level01] 连通性检查通过：起点→终点 {distance} 格 ≈ {pathMeters:0.0} m，生成 {walls.Length} 面墙");
 
             BuildScene(Level01Path, new Vector2(2f, 0f), 3f, walls,
-                new Vector2(2f, 0f), new Vector2(60f, -1.5f), "Level01",
+                new Vector2(2f, 0f), new[] { new Vector2(60f, -1.5f), new Vector2(88f, 1.2f) }, "Level01",
                 followCamera: true, goalPosition: new Vector2(126f, 0f),
                 checkpointPositions: new[]
                 {
@@ -136,7 +136,8 @@ namespace Collection.EditorTools
                     new Vector2(95f, 1.0f),
                 },
                 narrative: EnsureNarrativeChapter1(),
-                worldTexts: EnsureWorldTextsChapter1());
+                worldTexts: EnsureWorldTextsChapter1(),
+                trapPosition: new Vector2(74f, -1.25f));
         }
 
         private const float GridCell = 0.5f;
@@ -322,10 +323,10 @@ namespace Collection.EditorTools
         }
 
         private static void BuildScene(string scenePath, Vector2 cameraPosition, float cameraSize,
-            (string Name, Vector2 Center, Vector2 Size)[] walls, Vector2 playerSpawn, Vector2 enemySpawn,
+            (string Name, Vector2 Center, Vector2 Size)[] walls, Vector2 playerSpawn, Vector2[] enemySpawns,
             string worldName, bool followCamera = false, Vector2? goalPosition = null,
             Vector2[] checkpointPositions = null, NarrativeSettings narrative = null,
-            WorldTextSettings worldTexts = null)
+            WorldTextSettings worldTexts = null, Vector2? trapPosition = null)
         {
             Scene active = EditorSceneManager.GetActiveScene();
             if (active.isDirty)
@@ -409,15 +410,19 @@ namespace Collection.EditorTools
                 return;
             }
 
-            var enemyGo = new GameObject("Enemy");
-            enemyGo.transform.position = enemySpawn;
-            var enemy = CreateEnemy(enemyGo, sprite, material);
-            enemy.Initialize(ripple, enemySettings);
+            var enemies = new EnemyController[enemySpawns.Length];
+            for (int i = 0; i < enemySpawns.Length; i++)
+            {
+                var enemyGo = new GameObject(enemySpawns.Length > 1 ? $"Enemy_{i}" : "Enemy");
+                enemyGo.transform.position = enemySpawns[i];
+                enemies[i] = CreateEnemy(enemyGo, sprite, material);
+                enemies[i].Initialize(ripple, enemySettings);
+            }
 
             // 失败循环：接触 → GameOver 覆盖层 → 重试回到入口
             var flowGo = new GameObject("GameFlow");
             var flow = flowGo.AddComponent<SpikeFlow>();
-            flow.Initialize(player, stepper, enemy, ripple, playerSpawn, enemySpawn);
+            flow.Initialize(player, stepper, enemies, ripple, playerSpawn, enemySpawns);
 
             if (goalPosition.HasValue)
             {
@@ -440,12 +445,17 @@ namespace Collection.EditorTools
                 }
             }
 
+            if (trapPosition.HasValue)
+            {
+                CreateVoidTrap(trapPosition.Value, player, ripple, sprite, material);
+            }
+
             // D-3 接近脉冲：屏幕边缘提示，不给方向
             var pulse = rippleGo.AddComponent<ProximityPulse>();
-            pulse.Initialize(enemy, player);
+            pulse.Initialize(enemies, player);
 
             var hud = rippleGo.AddComponent<SpikeHud>();
-            hud.Initialize(ripple, player, stepper, enemy, pulse, flow);
+            hud.Initialize(ripple, player, stepper, enemies, pulse, flow);
 
             EditorSceneManager.MarkSceneDirty(scene);
             if (!EditorSceneManager.SaveScene(scene, scenePath))
@@ -696,6 +706,30 @@ namespace Collection.EditorTools
 
             AssetDatabase.CreateAsset(settings, WorldTextsPath);
             return settings;
+        }
+
+        /// <summary>虚无陷阱：踩到脚下发满档声响。</summary>
+        private static void CreateVoidTrap(Vector2 position, PlayerController player, RippleSystem ripple,
+            Sprite sprite, Material material)
+        {
+            var go = new GameObject("VoidTrap_0");
+            go.transform.position = position;
+
+            var trigger = go.AddComponent<BoxCollider2D>();
+            trigger.isTrigger = true;
+            trigger.size = new Vector2(1.2f, 1.2f);
+
+            var visualGo = new GameObject("TrapVisual");
+            visualGo.transform.SetParent(go.transform, false);
+            var visual = visualGo.AddComponent<SpriteRenderer>();
+            visual.sprite = sprite;
+            visual.sharedMaterial = material;
+            visual.color = new Color(0.16f, 0.10f, 0.24f, 0.85f);
+            visual.sortingOrder = 1;
+            visualGo.transform.localScale = new Vector3(1.2f, 1.2f, 1f);
+
+            var trap = go.AddComponent<VoidTrap>();
+            trap.Initialize(player, ripple, visual);
         }
 
         /// <summary>把 SO 里的每条文本生成为世界空间 TMP + 触发区。</summary>

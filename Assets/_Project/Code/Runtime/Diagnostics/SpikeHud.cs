@@ -16,19 +16,19 @@ namespace Collection.Runtime.Diagnostics
         [SerializeField] private RippleSystem _ripple;
         [SerializeField] private PlayerController _player;
         [SerializeField] private FootStepper _stepper;
-        [SerializeField] private EnemyController _enemy;
+        [SerializeField] private EnemyController[] _enemies = new EnemyController[0];
         [SerializeField] private ProximityPulse _pulse;
         [SerializeField] private SpikeFlow _flow;
 
         private float _smoothedFps = 60f;
 
         public void Initialize(RippleSystem ripple, PlayerController player, FootStepper stepper,
-            EnemyController enemy, ProximityPulse pulse, SpikeFlow flow)
+            EnemyController[] enemies, ProximityPulse pulse, SpikeFlow flow)
         {
             _ripple = ripple;
             _player = player;
             _stepper = stepper;
-            _enemy = enemy;
+            _enemies = enemies ?? new EnemyController[0];
             _pulse = pulse;
             _flow = flow;
         }
@@ -98,14 +98,29 @@ namespace Collection.Runtime.Diagnostics
 
         private string EnemyLine()
         {
-            if (_enemy == null) return "敌人: 未配置";
+            if (_enemies == null || _enemies.Length == 0) return "敌人: 未配置";
 
-            float distance = Vector2.Distance(_enemy.transform.position, _enemy.Target);
-            string seek = _enemy.LastSeekSeconds >= 0f ? $"{_enemy.LastSeekSeconds:0.00} s" : "—";
+            var builder = new System.Text.StringBuilder("敌人: ");
+            for (int i = 0; i < _enemies.Length; i++)
+            {
+                EnemyController enemy = _enemies[i];
+                if (enemy == null) continue;
 
-            return $"敌人: {_enemy.State}　目标 ({_enemy.Target.x:0.00},{_enemy.Target.y:0.00})　距离 {distance:0.00} m" +
-                   $"　上次/最长到达 {seek}/{_enemy.MaxSeekSeconds:0.00} s" +
-                   $"　Seek/Camp {_enemy.SeekCount}/{_enemy.CampCount}　卡墙 {_enemy.StuckCount} 次";
+                if (i > 0) builder.Append("　|　");
+
+                Vector3 position = enemy.transform.position;
+                string seek = enemy.LastSeekSeconds >= 0f ? $"{enemy.LastSeekSeconds:0.00}" : "—";
+                builder.Append($"[{i}] {enemy.State} ({position.x:0.0},{position.y:0.0})")
+                       .Append($" 到达{seek}s　Seek/Camp {enemy.SeekCount}/{enemy.CampCount}");
+
+                if (_player != null)
+                {
+                    float distance = Vector2.Distance(_player.transform.position, position);
+                    builder.Append($"　距 {distance:0.00} m");
+                }
+            }
+
+            return builder.ToString();
         }
 
         private string DropletLine()

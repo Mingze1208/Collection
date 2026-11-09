@@ -11,7 +11,10 @@ namespace Collection.Runtime.Feedback
     /// </summary>
     public sealed class ProximityPulse : MonoBehaviour
     {
-        [SerializeField] private EnemyController _enemy;
+        [SerializeField] private EnemyController[] _enemies = new EnemyController[0];
+
+        // 当前产生脉冲的敌人（运行时从 _enemies 里选最近的）
+        private EnemyController _enemy;
         [SerializeField] private PlayerController _player;
 
         private Texture2D _vignette;
@@ -34,11 +37,14 @@ namespace Collection.Runtime.Feedback
         public bool IsFlashing => Time.time < _flashUntil;
         public int FlashCount { get; private set; }
 
-        public void Initialize(EnemyController enemy, PlayerController player)
+        public void Initialize(EnemyController[] enemies, PlayerController player)
         {
-            _enemy = enemy;
+            _enemies = enemies ?? new EnemyController[0];
             _player = player;
         }
+
+        /// <summary>当前产生脉冲的敌人（最近的那个）；无危险时为 null。</summary>
+        public EnemyController NearestEnemy { get; private set; }
 
         private void Awake()
         {
@@ -52,12 +58,37 @@ namespace Collection.Runtime.Feedback
 
         private void Update()
         {
-            if (_enemy == null || _player == null || !_enemy.isActiveAndEnabled)
+            if (_player == null)
             {
                 IsActive = false;
                 Intensity = 0f;
                 return;
             }
+
+            // 取“最近的、处于 Seek/Camp 且范围内”的敌人
+            EnemyController enemy = null;
+            float bestDistance = float.MaxValue;
+            foreach (EnemyController candidate in _enemies)
+            {
+                if (candidate == null || !candidate.isActiveAndEnabled) continue;
+
+                float candidateDistance = Vector2.Distance(_player.transform.position, candidate.transform.position);
+                if (candidateDistance >= bestDistance) continue;
+
+                bestDistance = candidateDistance;
+                enemy = candidate;
+            }
+
+            if (enemy == null)
+            {
+                NearestEnemy = null;
+                IsActive = false;
+                Intensity = 0f;
+                return;
+            }
+
+            _enemy = enemy;
+            NearestEnemy = enemy;
 
             EnemySettings settings = _enemy.Settings;
             if (settings == null)
