@@ -134,7 +134,7 @@ namespace Collection.Runtime.Flow
 
         public void Die() => Die(-1f);
 
-        public void Die(float distance)
+        public void Die(float distance, string reason = null)
         {
             if (State == SpikeState.GameOver) return;
 
@@ -147,9 +147,10 @@ namespace Collection.Runtime.Flow
             StopEnemies();
             if (_ripple != null) _ripple.Clear();
 
+            string cause = string.IsNullOrEmpty(reason) ? "敌人接触到玩家" : reason;
             Debug.Log(
-                $"[Flow] GameOver #{DeathCount}：敌人接触到玩家（距离 {distance:0.00} m，" +
-                $"判定阈值 {EffectiveKillDistance:0.00} m）");
+                $"[Flow] GameOver #{DeathCount}：{cause}" +
+                (distance >= 0f ? $"（距离 {distance:0.00} m，判定阈值 {EffectiveKillDistance:0.00} m）" : string.Empty));
         }
 
         private void HandleGameOverInput()

@@ -553,7 +553,7 @@ namespace Collection.EditorTools
 
             if (trapPosition.HasValue)
             {
-                CreateVoidTrap(trapPosition.Value, player, ripple, sprite, material);
+                CreateVoidTrap(trapPosition.Value, player, flow, ripple, sprite, material);
             }
 
             // D-3 接近脉冲：屏幕边缘提示，不给方向
@@ -815,8 +815,8 @@ namespace Collection.EditorTools
         }
 
         /// <summary>虚无陷阱：踩到脚下发满档声响。</summary>
-        private static void CreateVoidTrap(Vector2 position, PlayerController player, RippleSystem ripple,
-            Sprite sprite, Material material)
+        private static void CreateVoidTrap(Vector2 position, PlayerController player, SpikeFlow flow,
+            RippleSystem ripple, Sprite sprite, Material material)
         {
             var go = new GameObject("VoidTrap_0");
             go.transform.position = position;
@@ -830,12 +830,12 @@ namespace Collection.EditorTools
             var visual = visualGo.AddComponent<SpriteRenderer>();
             visual.sprite = sprite;
             visual.sharedMaterial = material;
-            visual.color = new Color(0.16f, 0.10f, 0.24f, 0.85f);
+            visual.color = new Color(0.85f, 0.15f, 0.25f, 0f);
             visual.sortingOrder = 1;
             visualGo.transform.localScale = new Vector3(1.2f, 1.2f, 1f);
 
             var trap = go.AddComponent<VoidTrap>();
-            trap.Initialize(player, ripple, visual);
+            trap.Initialize(player, flow, ripple, visual);
         }
 
         /// <summary>第二章世界文本（5 条，约 104 字）。</summary>

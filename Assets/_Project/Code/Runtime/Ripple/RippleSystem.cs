@@ -17,6 +17,9 @@ namespace Collection.Runtime.Ripple
         [SerializeField] private Sprite _dotSprite;
         [SerializeField] private Material _dotMaterial;
 
+        [Tooltip("落入陷阱范围的声音点颜色（红）。")]
+        [SerializeField] private Color _trapDotColor = new Color(1f, 0.22f, 0.32f, 1f);
+
         private sealed class Burst
         {
             public RipplePath[] Paths;
@@ -30,6 +33,7 @@ namespace Collection.Runtime.Ripple
         }
 
         private readonly List<Aabb> _walls = new List<Aabb>();
+        private readonly List<Aabb> _trapZones = new List<Aabb>();
         private readonly List<Burst> _bursts = new List<Burst>();
         private readonly List<SpriteRenderer> _pool = new List<SpriteRenderer>();
         private readonly List<Vector2> _dotPositions = new List<Vector2>();
@@ -43,6 +47,14 @@ namespace Collection.Runtime.Ripple
 
         /// <summary>墙体 AABB 列表（只读），供覆盖率等离线计算使用。</summary>
         public IReadOnlyList<Aabb> Walls => _walls;
+
+        /// <summary>陷阱区域（只读）：落进区域内的声音点会被染红。</summary>
+        public IReadOnlyList<Aabb> TrapZones => _trapZones;
+
+        /// <summary>注册一个陷阱区域（场景重建时清空）。</summary>
+        public void RegisterTrapZone(Aabb zone) => _trapZones.Add(zone);
+
+        public void ClearTrapZones() => _trapZones.Clear();
 
         /// <summary>最近一次发声的时刻（Time.time），供 HUD 显示“发声距今多久”。</summary>
         public float LastEmitTime { get; private set; } = float.NegativeInfinity;
@@ -264,6 +276,9 @@ namespace Collection.Runtime.Ripple
                         float fade = ageFade * tailFade;
                         var color = Color.Lerp(Color.black, baseColor, fade);
                         color.a = baseColor.a * fade;
+
+                        // 落进陷阱范围的声音点变红：玩家由此“看见”陷阱
+                        if (InTrapZone(position)) color = _trapDotColor;
                         dot.color = color;
                         dot.enabled = true;
 
@@ -277,6 +292,16 @@ namespace Collection.Runtime.Ripple
             if (_dotPositions.Count > PeakDotCount) PeakDotCount = _dotPositions.Count;
 
             for (int i = used; i < _pool.Count; i++) _pool[i].enabled = false;
+        }
+
+        private bool InTrapZone(Vec2 position)
+        {
+            for (int i = 0; i < _trapZones.Count; i++)
+            {
+                if (_trapZones[i].Contains(position)) return true;
+            }
+
+            return false;
         }
 
         private SpriteRenderer GetDot(int index)
