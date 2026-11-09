@@ -10,14 +10,16 @@ namespace Collection.Runtime.Flow
     public sealed class ChapterGoal : MonoBehaviour
     {
         [SerializeField] private PlayerController _player;
+        [SerializeField] private string _chapterTitle = "第一章";
 
         public bool Completed { get; private set; }
         public int TriggerCount { get; private set; }
         public float ReachedAt { get; private set; } = -1f;
 
-        public void Initialize(PlayerController player)
+        public void Initialize(PlayerController player, string chapterTitle = null)
         {
             _player = player;
+            if (!string.IsNullOrEmpty(chapterTitle)) _chapterTitle = chapterTitle;
         }
 
         private void OnTriggerEnter2D(Collider2D other)
@@ -55,7 +57,7 @@ namespace Collection.Runtime.Flow
             };
 
             float y = Screen.height * 0.5f - 40f;
-            GUI.Label(new Rect(0f, y, Screen.width, 60f), "第一章 · 结束", title);
+            GUI.Label(new Rect(0f, y, Screen.width, 60f), $"{_chapterTitle} · 结束", title);
             GUI.Label(new Rect(0f, y + 60f, Screen.width, 30f),
                 $"到达时刻 {ReachedAt:0.0} s（场景内计时）　·　下一章尚未实现", hint);
         }

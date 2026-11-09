@@ -36,6 +36,9 @@ namespace Collection.EditorTools
         private const string WorldTextsPath2 = DataFolder + "/SO_WorldTexts_Ch2.asset";
         private const string NarrativePath2 = DataFolder + "/SO_Narrative_Ch2.asset";
         private const string Level02Path = "Assets/_Project/Scenes/SC_Level02.unity";
+        private const string Level03Path = "Assets/_Project/Scenes/SC_Level03.unity";
+        private const string WorldTextsPath3 = DataFolder + "/SO_WorldTexts_Ch3.asset";
+        private const string NarrativePath3 = DataFolder + "/SO_Narrative_Ch3.asset";
         private const string FontAssetPath = "Assets/_Project/Art/Font/font1716_TMP.asset";
 
         // 首段叙事（hook）：黑暗 → 出声显形 → 唱歌的来处 → “但是”
@@ -180,6 +183,54 @@ namespace Collection.EditorTools
             Debug.Log("[Level02] 已生成：200 m 直廊，缺口 x∈[96,98] 仅 1.5 m 高，敌人堵在 (97,0)");
         }
 
+        // 第三章：200 m 直廊，3 个敌人 + 结局
+        private static readonly (string Name, Vector2 Center, Vector2 Size)[] Level03Walls =
+        {
+            ("Wall_Top", new Vector2(100f, 2.0f), new Vector2(200.5f, 0.5f)),
+            ("Wall_Bottom", new Vector2(100f, -2.0f), new Vector2(200.5f, 0.5f)),
+            ("Wall_Left", new Vector2(-0.25f, 0f), new Vector2(0.5f, 4.5f)),
+            ("Wall_Right", new Vector2(200.5f, 0f), new Vector2(0.5f, 4.5f)),
+        };
+
+        private static readonly string[] Level03EndingLines =
+        {
+            "《涟漪》",
+            "她终于明白：唱歌本身就有意义。",
+            "不需要听众，也不需要回声。",
+            "黑暗还在，但她不再是那个怕黑的人。",
+            "",
+            "按 R 重看结局",
+        };
+
+        [MenuItem("Collection/Spike/Rebuild SC_Level03 Scene", priority = 5)]
+        public static void RebuildLevel03Scene()
+        {
+            EnsureWorldTextsChapter3();
+            EnsureNarrativeChapter3();
+
+            BuildScene(Level03Path, new Vector2(2f, 0f), 3f, Level03Walls,
+                new Vector2(2f, 0f), new[]
+                {
+                    new Vector2(45f, 0f),
+                    new Vector2(110f, 0f),
+                    new Vector2(160f, 0f),
+                }, "Level03",
+                followCamera: true, goalPosition: new Vector2(198f, 0f),
+                checkpointPositions: new[]
+                {
+                    new Vector2(30f, 1.2f),
+                    new Vector2(100f, -1.2f),
+                    new Vector2(150f, 1.2f),
+                },
+                narrativePath: NarrativePath3,
+                worldTextsPath: WorldTextsPath3,
+                trapPosition: new Vector2(80f, 0.9f),
+                chapterTitle: "第三章",
+                endingLines: Level03EndingLines);
+
+            Debug.Log("[Level03] 已生成：200 m 直廊，3 个敌人，结局画面 + R 重看");
+        }
+
         private const float GridCell = 0.5f;
         private const float WallThickness = 0.5f;
 
@@ -313,7 +364,8 @@ namespace Collection.EditorTools
             return -1;
         }
 
-        private static void CreateGoal(Vector2 position, PlayerController player, Sprite sprite, Material material)
+        private static void CreateGoal(Vector2 position, PlayerController player, Sprite sprite, Material material,
+            string chapterTitle = null, string[] endingLines = null)
         {
             var go = new GameObject("FinishDoor");
             go.transform.position = new Vector3(position.x, position.y, 0f);
@@ -334,7 +386,14 @@ namespace Collection.EditorTools
             trigger.size = new Vector2(1.6f, 2.4f);
 
             var goal = go.AddComponent<ChapterGoal>();
-            goal.Initialize(player);
+            goal.Initialize(player, chapterTitle);
+
+            // 第三章：结局画面（黑场逐行 + R 重看）
+            if (endingLines != null && endingLines.Length > 0)
+            {
+                var ending = go.AddComponent<EndingScreen>();
+                ending.Initialize(goal, endingLines);
+            }
         }
 
         private static void CreateCheckpoint(Vector2 position, int index, PlayerController player, SpikeFlow flow,
@@ -366,7 +425,8 @@ namespace Collection.EditorTools
             (string Name, Vector2 Center, Vector2 Size)[] walls, Vector2 playerSpawn, Vector2[] enemySpawns,
             string worldName, bool followCamera = false, Vector2? goalPosition = null,
             Vector2[] checkpointPositions = null, string narrativePath = null,
-            string worldTextsPath = null, Vector2? trapPosition = null)
+            string worldTextsPath = null, Vector2? trapPosition = null,
+            string chapterTitle = null, string[] endingLines = null)
         {
             Scene active = EditorSceneManager.GetActiveScene();
             if (active.isDirty)
@@ -467,7 +527,7 @@ namespace Collection.EditorTools
 
             if (goalPosition.HasValue)
             {
-                CreateGoal(goalPosition.Value, player, sprite, material);
+                CreateGoal(goalPosition.Value, player, sprite, material, chapterTitle, endingLines);
             }
 
             // 同理：字幕也只给显式指定的章节
@@ -848,6 +908,104 @@ namespace Collection.EditorTools
                 "有什么东西，一直挡在缺口里。",
                 "她把一滴眼泪，轻轻抛向远处。",
                 "声音落下的地方，不是她站的地方。",
+            };
+
+            var serialized = new SerializedObject(settings);
+            SerializedProperty linesProperty = serialized.FindProperty("_lines");
+            linesProperty.arraySize = lines.Length;
+            for (int i = 0; i < lines.Length; i++)
+            {
+                linesProperty.GetArrayElementAtIndex(i).stringValue = lines[i];
+            }
+
+            serialized.FindProperty("_lineDuration").floatValue = 3f;
+            serialized.FindProperty("_fadeTime").floatValue = 0.4f;
+            serialized.FindProperty("_startDelay").floatValue = 1f;
+            serialized.ApplyModifiedPropertiesWithoutUndo();
+
+            EditorUtility.SetDirty(settings);
+            AssetDatabase.SaveAssets();
+            return settings;
+        }
+
+        /// <summary>第三章世界文本（6 条，约 102 字）。</summary>
+        private static WorldTextSettings EnsureWorldTextsChapter3()
+        {
+            var existing = AssetDatabase.LoadAssetAtPath<WorldTextSettings>(WorldTextsPath3);
+            if (existing != null) return existing;
+
+            var settings = ScriptableObject.CreateInstance<WorldTextSettings>();
+            settings.SetEntries(new[]
+            {
+                new WorldTextSettings.Entry
+                {
+                    TextPosition = new Vector2(25f, 1.4f),
+                    TriggerCenter = new Vector2(25f, 0f),
+                    TriggerSize = new Vector2(4f, 4f),
+                    Width = 7f,
+                    Text = "第三段记忆里，连<wave>回声</wave>都被吞掉了。",
+                },
+                new WorldTextSettings.Entry
+                {
+                    TextPosition = new Vector2(60f, 1.4f),
+                    TriggerCenter = new Vector2(60f, 0f),
+                    TriggerSize = new Vector2(4f, 4f),
+                    Width = 7f,
+                    Text = "她开始怀疑，唱歌到底还有没有意义。",
+                },
+                new WorldTextSettings.Entry
+                {
+                    TextPosition = new Vector2(95f, 1.4f),
+                    TriggerCenter = new Vector2(95f, 0f),
+                    TriggerSize = new Vector2(4f, 4f),
+                    Width = 7f,
+                    Text = "恐惧不是声音，是声音落下之后的<color=#c792ea>沉默</color>。",
+                },
+                new WorldTextSettings.Entry
+                {
+                    TextPosition = new Vector2(130f, 1.4f),
+                    TriggerCenter = new Vector2(130f, 0f),
+                    TriggerSize = new Vector2(4f, 4f),
+                    Width = 7f,
+                    Text = "她想起来，小时候唱歌，从来不是为了谁。",
+                },
+                new WorldTextSettings.Entry
+                {
+                    TextPosition = new Vector2(160f, 1.4f),
+                    TriggerCenter = new Vector2(160f, 0f),
+                    TriggerSize = new Vector2(4f, 4f),
+                    Width = 7f,
+                    Text = "可她还是唱了，哪怕黑暗里没有人听。",
+                },
+                new WorldTextSettings.Entry
+                {
+                    TextPosition = new Vector2(185f, 1.4f),
+                    TriggerCenter = new Vector2(185f, 0f),
+                    TriggerSize = new Vector2(4f, 4f),
+                    Width = 7f,
+                    Text = "这一次，她只想<wave>听清</wave>自己的声音。",
+                },
+            });
+            AssetDatabase.CreateAsset(settings, WorldTextsPath3);
+            return settings;
+        }
+
+        /// <summary>第三章叙事（5 行，约 55 字）。</summary>
+        private static NarrativeSettings EnsureNarrativeChapter3()
+        {
+            var existing = AssetDatabase.LoadAssetAtPath<NarrativeSettings>(NarrativePath3);
+            if (existing != null) return existing;
+
+            var settings = ScriptableObject.CreateInstance<NarrativeSettings>();
+            AssetDatabase.CreateAsset(settings, NarrativePath3);
+
+            string[] lines =
+            {
+                "最后一层，安静得可怕。",
+                "她怕的不是被听见，是没人再听。",
+                "可她还是会唱。",
+                "因为唱歌这件事本身，就是她的光。",
+                "——她睁开眼睛。",
             };
 
             var serialized = new SerializedObject(settings);
