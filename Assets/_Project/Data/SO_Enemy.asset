@@ -1,0 +1,20 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: cee7141afeda73541afc5a70133b2a41, type: 3}
+  m_Name: SO_Enemy
+  m_EditorClassIdentifier: Assembly-CSharp::Collection.Runtime.Enemy.EnemySettings
+  _moveSpeed: 2.5
+  _arriveDistance: 0.15
+  _senseRadius: 0.45
+  _retargetDistance: 0.3
+  _stuckCheckInterval: 0.5
+  _stuckMoveThreshold: 0.1

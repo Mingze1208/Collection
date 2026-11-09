@@ -1,0 +1,197 @@
+using Collection.Runtime.Enemy;
+using Collection.Runtime.Player;
+using Collection.Runtime.Ripple;
+using UnityEngine;
+using UnityEngine.InputSystem;
+
+namespace Collection.Runtime.Flow
+{
+    public enum SpikeState
+    {
+        Playing = 0,
+        GameOver = 1,
+    }
+
+    /// <summary>
+    /// 失败循环：敌人接触玩家 → GameOver 覆盖层 → 重试（回到房间入口）或返回主菜单（D1 占位）。
+    /// 重试是就地复位，不做场景重载，所以“覆盖层出现到可再次移动”耗时在毫秒级。
+    /// </summary>
+    public sealed class SpikeFlow : MonoBehaviour
+    {
+        [SerializeField] private PlayerController _player;
+        [SerializeField] private FootStepper _stepper;
+        [SerializeField] private EnemyController _enemy;
+        [SerializeField] private RippleSystem _ripple;
+
+        [Header("复活点")]
+        [SerializeField] private Vector2 _playerSpawn = new Vector2(-2.5f, -2.5f);
+        [SerializeField] private Vector2 _enemySpawn = new Vector2(3f, -2f);
+
+        public SpikeState State { get; private set; } = SpikeState.Playing;
+        public int DeathCount { get; private set; }
+        public int RetryCount { get; private set; }
+
+        /// <summary>从按下重试到玩家重新可移动的耗时（ms）。</summary>
+        public float RetryCostMs { get; private set; } = -1f;
+
+        /// <summary>覆盖层出现到按下重试之间停留了多久（ms，含玩家反应时间）。</summary>
+        public float OverlayDwellMs { get; private set; } = -1f;
+
+        public string MenuNotice { get; private set; } = string.Empty;
+
+        private float _deathRealtime;
+        private float _playerRadius = 0.3f;
+        private float _enemyRadius = 0.3f;
+
+        /// <summary>实际使用的致命距离：参数值，但绝不会小于两者碰撞体接触距离。</summary>
+        public float EffectiveKillDistance =>
+            Mathf.Max(_enemy != null ? _enemy.KillDistance : 0.55f, _playerRadius + _enemyRadius + 0.02f);
+
+        public void Initialize(PlayerController player, FootStepper stepper, EnemyController enemy,
+            RippleSystem ripple, Vector2 playerSpawn, Vector2 enemySpawn)
+        {
+            _player = player;
+            _stepper = stepper;
+            _enemy = enemy;
+            _ripple = ripple;
+            _playerSpawn = playerSpawn;
+            _enemySpawn = enemySpawn;
+
+            _playerRadius = RadiusOf(player != null ? player.GetComponent<Collider2D>() : null);
+            _enemyRadius = RadiusOf(enemy != null ? enemy.GetComponent<Collider2D>() : null);
+        }
+
+        private static float RadiusOf(Collider2D collider)
+        {
+            if (collider == null) return 0.3f;
+            return Mathf.Max(0.05f, collider.bounds.extents.x);
+        }
+
+        private void Update()
+        {
+            if (State == SpikeState.Playing)
+            {
+                CheckCaught();
+                return;
+            }
+
+            HandleGameOverInput();
+        }
+
+        private void CheckCaught()
+        {
+            if (_player == null || _enemy == null) return;
+
+            float distance = Vector2.Distance(_player.transform.position, _enemy.transform.position);
+            if (distance > EffectiveKillDistance) return;
+
+            Die(distance);
+        }
+
+        public void Die() => Die(-1f);
+
+        public void Die(float distance)
+        {
+            if (State == SpikeState.GameOver) return;
+
+            State = SpikeState.GameOver;
+            DeathCount++;
+            _deathRealtime = Time.realtimeSinceStartup;
+            MenuNotice = string.Empty;
+
+            if (_player != null) _player.SetInputEnabled(false);
+            if (_enemy != null) _enemy.Stop();
+            if (_ripple != null) _ripple.Clear();
+
+            Debug.Log(
+                $"[Flow] GameOver #{DeathCount}：敌人接触到玩家（距离 {distance:0.00} m，" +
+                $"判定阈值 {EffectiveKillDistance:0.00} m）");
+        }
+
+        private void HandleGameOverInput()
+        {
+            Keyboard keyboard = Keyboard.current;
+            if (keyboard == null) return;
+
+            if (keyboard.rKey.wasPressedThisFrame)
+            {
+                Retry();
+                return;
+            }
+
+            if (keyboard.escapeKey.wasPressedThisFrame)
+            {
+                MenuNotice = "主菜单尚未实现（D1 范围外）";
+                Debug.Log($"[Flow] 返回主菜单：{MenuNotice}");
+            }
+        }
+
+        /// <summary>重试：玩家回到房间入口，敌人回到出生点。</summary>
+        public void Retry()
+        {
+            float start = Time.realtimeSinceStartup;
+            OverlayDwellMs = (start - _deathRealtime) * 1000f;
+
+            if (_player != null)
+            {
+                _player.Teleport(_playerSpawn);
+                _player.SetInputEnabled(true);
+            }
+
+            if (_stepper != null) _stepper.ResetFeet();
+            if (_ripple != null) _ripple.Clear();
+            if (_enemy != null) _enemy.ResetTo(_enemySpawn);
+
+            State = SpikeState.Playing;
+            RetryCount++;
+            RetryCostMs = (Time.realtimeSinceStartup - start) * 1000f;
+
+            Debug.Log(
+                $"[Flow] Retry #{RetryCount}：玩家 → ({_playerSpawn.x:0.00},{_playerSpawn.y:0.00})，" +
+                $"敌人 → ({_enemySpawn.x:0.00},{_enemySpawn.y:0.00})；" +
+                $"覆盖层停留 {OverlayDwellMs:0.0} ms，重试生效 {RetryCostMs:0.00} ms");
+        }
+
+        private void OnGUI()
+        {
+            if (State != SpikeState.GameOver) return;
+
+            GUI.color = new Color(0f, 0f, 0f, 0.72f);
+            GUI.DrawTexture(new Rect(0f, 0f, Screen.width, Screen.height), Texture2D.whiteTexture);
+            GUI.color = Color.white;
+
+            var title = new GUIStyle(GUI.skin.label)
+            {
+                fontSize = 44,
+                alignment = TextAnchor.MiddleCenter,
+                normal = { textColor = new Color(1f, 0.45f, 0.45f) },
+            };
+            var body = new GUIStyle(GUI.skin.label)
+            {
+                fontSize = 20,
+                alignment = TextAnchor.MiddleCenter,
+                normal = { textColor = Color.white },
+            };
+            var hint = new GUIStyle(GUI.skin.label)
+            {
+                fontSize = 14,
+                alignment = TextAnchor.MiddleCenter,
+                normal = { textColor = new Color(0.8f, 0.8f, 0.85f) },
+            };
+
+            float centerY = Screen.height * 0.5f - 90f;
+            GUI.Label(new Rect(0f, centerY, Screen.width, 60f), "GAME OVER", title);
+            GUI.Label(new Rect(0f, centerY + 70f, Screen.width, 30f),
+                $"按 R 重试（回到房间入口）　·　按 Esc 返回主菜单", body);
+            GUI.Label(new Rect(0f, centerY + 110f, Screen.width, 24f),
+                $"已死亡 {DeathCount} 次" +
+                (RetryCostMs >= 0f ? $"　上次重试生效 {RetryCostMs:0.00} ms" : string.Empty),
+                hint);
+
+            if (!string.IsNullOrEmpty(MenuNotice))
+            {
+                GUI.Label(new Rect(0f, centerY + 140f, Screen.width, 24f), MenuNotice, hint);
+            }
+        }
+    }
+}

@@ -1,0 +1,29 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 60a5499e15e3af547aceb182aeb0ca6d, type: 3}
+  m_Name: SO_Ripple_A
+  m_EditorClassIdentifier: Assembly-CSharp::Collection.Runtime.Ripple.RippleSettings
+  _speed: 1
+  _lifetime: 2
+  _directionCount: 24
+  _trailDots: 8
+  _trailSpacing: 0.12
+  _maxDots: 512
+  _dotRadius: 0.05
+  _maxBounces: 8
+  _footstepDirectionCount: 12
+  _footstepTrailDots: 4
+  _stepLength: 0.8
+  _stepInterval: 0.35
+  _ghostFadeTime: 1.2
+  _footSize: 0.3
+  _dotColor: {r: 0.72, g: 0.95, b: 1, a: 1}
