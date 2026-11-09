@@ -28,6 +28,9 @@ namespace Collection.Runtime.Player
         private float _nextVoiceTime;
 
         public bool IsMoving => _moveInput.sqrMagnitude > 0.0001f;
+
+        /// <summary>GameOver 等情况下输入是否被关掉（泪滴等组件据此停手）。</summary>
+        public bool InputEnabled => _inputEnabled;
         public Vector2 MoveInput => _moveInput;
 
         /// <summary>唱歌（空格）次数。</summary>

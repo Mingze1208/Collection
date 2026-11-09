@@ -90,6 +90,7 @@ namespace Collection.Runtime.Diagnostics
             GUILayout.Label(BreathLine(), style);
             GUILayout.Label(PulseLine(), style);
             GUILayout.Label(CheckpointLine(), style);
+            GUILayout.Label(DropletLine(), style);
             GUILayout.Label("WASD 移动（落脚发声，绿点=有声落脚） · 按住 Shift 屏息静步（蓝点=静步） · 空格 唱歌", style);
             GUILayout.EndArea();
 #endif
@@ -105,6 +106,17 @@ namespace Collection.Runtime.Diagnostics
             return $"敌人: {_enemy.State}　目标 ({_enemy.Target.x:0.00},{_enemy.Target.y:0.00})　距离 {distance:0.00} m" +
                    $"　上次/最长到达 {seek}/{_enemy.MaxSeekSeconds:0.00} s" +
                    $"　Seek/Camp {_enemy.SeekCount}/{_enemy.CampCount}　卡墙 {_enemy.StuckCount} 次";
+        }
+
+        private string DropletLine()
+        {
+            var thrower = _player != null ? _player.GetComponent<DropletThrower>() : null;
+            if (thrower == null) return "泪滴: 未配置";
+
+            return $"泪滴: 冷却 {thrower.CooldownRemaining:0.00} s　投掷 {thrower.ThrowCount} 次" +
+                   $"　落地 {thrower.LandingCount} 次　冷却挡下 {thrower.BlockedCount} 次" +
+                   $"　落点 ({(thrower.LandingCount > 0 ? thrower.LastLanding.x : 0f):0.00}," +
+                   $"{(thrower.LandingCount > 0 ? thrower.LastLanding.y : 0f):0.00})";
         }
 
         private string CheckpointLine()

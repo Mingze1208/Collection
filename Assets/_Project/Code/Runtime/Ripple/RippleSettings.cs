@@ -47,6 +47,19 @@ namespace Collection.Runtime.Ripple
         [Tooltip("脚方块边长（m）。")]
         [SerializeField, Min(0.02f)] private float _footSize = 0.3f;
 
+        [Header("泪滴（投掷）")]
+        [Tooltip("投射物速度（m/s）。")]
+        [SerializeField, Min(1f)] private float _dropletSpeed = 16f;
+
+        [Tooltip("最大射程（m）。")]
+        [SerializeField, Min(0.1f)] private float _dropletRange = 6f;
+
+        [Tooltip("投掷冷却（s）。")]
+        [SerializeField, Min(0f)] private float _dropletCooldown = 2f;
+
+        [Tooltip("投射物视觉半径（世界单位）。")]
+        [SerializeField, Min(0.01f)] private float _dropletRadius = 0.12f;
+
         [Header("屏息静步")]
         [Tooltip("一次屏息可持续多久（s）。")]
         [SerializeField, Min(0.5f)] private float _breathDuration = 3f;
@@ -68,5 +81,10 @@ namespace Collection.Runtime.Ripple
         public float FootSize => _footSize;
         public float BreathDuration => _breathDuration;
         public float BreathRecovery => _breathRecovery;
+
+        public float DropletSpeed => _dropletSpeed;
+        public float DropletRange => _dropletRange;
+        public float DropletCooldown => _dropletCooldown;
+        public float DropletRadius => _dropletRadius;
     }
 }

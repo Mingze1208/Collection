@@ -385,6 +385,10 @@ namespace Collection.EditorTools
 
             // 资产引用可能在构建过程中被 AssetDatabase 重新加载（变成“假 null”），用前按路径重解析
             if (worldTexts == null) worldTexts = AssetDatabase.LoadAssetAtPath<WorldTextSettings>(WorldTextsPath);
+            // T1 泪滴投掷：鼠标瞄准，投掷不发声，落地触发落脚档 burst
+            var thrower = playerGo.AddComponent<DropletThrower>();
+            thrower.Initialize(player, ripple, settings, circle, material);
+
             if (worldTexts != null)
             {
                 CreateWorldTexts(worldTexts, player, camera);

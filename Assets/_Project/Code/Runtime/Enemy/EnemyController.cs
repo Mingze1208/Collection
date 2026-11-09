@@ -157,7 +157,7 @@ namespace Collection.Runtime.Enemy
             _stuckTimer = 0f;
             SeekCount++;
 
-            Debug.Log($"[Enemy] →Seek 声源 ({source.x:0.00},{source.y:0.00})");
+            Debug.Log($"[Enemy] t={Time.time:0.00} →Seek 声源 ({source.x:0.00},{source.y:0.00})");
         }
 
         private void Arrive()
