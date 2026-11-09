@@ -3,26 +3,25 @@ using UnityEngine;
 namespace Collection.Runtime.Ripple
 {
     /// <summary>
-    /// 涟漪参数。玩法数值不硬编码：A 组基线 = 1 m/s × 2 s（one-pager v1）。
-    /// 换 B 组只需换一份 SO 资源，不改代码。
+    /// 涟漪参数。唱歌与落脚各有一档完整参数（RippleProfile），另有少量两组共用的项。
+    /// 玩法数值不硬编码，全部在这里调。
     /// </summary>
     [CreateAssetMenu(menuName = "Collection/Ripple Settings", fileName = "SO_Ripple")]
     public sealed class RippleSettings : ScriptableObject
     {
-        [Header("传播")]
-        [Tooltip("声音点速度（m/s）。A 组基线 1；B 组候选 3。")]
-        [SerializeField, Min(0.01f)] private float _speed = 1f;
+        [Header("唱歌（满档，空格）")]
+        [Tooltip("唱歌的涟漪：方向数、尾迹、速度、存活、颜色、冷却。")]
+        [SerializeField]
+        private RippleProfile _voice = new RippleProfile(
+            24, 8, 3f, 1.2f, 0.5f, new Color(0.72f, 0.95f, 1f, 1f));
 
-        [Tooltip("声音点存活时间（s）。A 组基线 2；B 组候选 2.5。")]
-        [SerializeField, Min(0.05f)] private float _lifetime = 2f;
+        [Header("落脚（轻量档，走路自动）")]
+        [Tooltip("走路的涟漪：点更少、更淡；冷却通常为 0（由步频控制）。")]
+        [SerializeField]
+        private RippleProfile _footstep = new RippleProfile(
+            12, 4, 3f, 1.2f, 0f, new Color(0.62f, 0.86f, 0.98f, 0.9f));
 
-        [Tooltip("每帧发射的方向数（点集密度）。")]
-        [SerializeField, Min(1)] private int _directionCount = 24;
-
-        [Header("尾迹")]
-        [Tooltip("每条路径上同时显示的点数（造成尾迹）。")]
-        [SerializeField, Min(1)] private int _trailDots = 8;
-
+        [Header("两组共用")]
         [Tooltip("相邻尾迹点的弧长间隔（m）。")]
         [SerializeField, Min(0.01f)] private float _trailSpacing = 0.12f;
 
@@ -34,13 +33,6 @@ namespace Collection.Runtime.Ripple
 
         [Tooltip("单条路径最多反射次数，防止贴墙时无限递归。")]
         [SerializeField, Min(0)] private int _maxBounces = 8;
-
-        [Header("脚步发声（轻量档）")]
-        [Tooltip("落脚时发射的方向数。比唱歌少，控制同屏点数。")]
-        [SerializeField, Min(1)] private int _footstepDirectionCount = 12;
-
-        [Tooltip("落脚时每条路径的尾迹点数。")]
-        [SerializeField, Min(1)] private int _footstepTrailDots = 4;
 
         [Header("步态（一步一印，脚用方块）")]
         [Tooltip("一步的距离（m）。")]
@@ -55,27 +47,26 @@ namespace Collection.Runtime.Ripple
         [Tooltip("脚方块边长（m）。")]
         [SerializeField, Min(0.02f)] private float _footSize = 0.3f;
 
-        [Header("表现")]
-        [SerializeField] private Color _dotColor = new Color(0.72f, 0.95f, 1f, 1f);
+        [Header("屏息静步")]
+        [Tooltip("一次屏息可持续多久（s）。")]
+        [SerializeField, Min(0.5f)] private float _breathDuration = 3f;
 
-        public float Speed => _speed;
-        public float Lifetime => _lifetime;
-        public int DirectionCount => _directionCount;
-        public int TrailDots => _trailDots;
+        [Tooltip("不屏息时呼吸恢复速度（每秒恢复多少秒的屏息）。")]
+        [SerializeField, Min(0.1f)] private float _breathRecovery = 1.5f;
+
+        public RippleProfile Voice => _voice;
+        public RippleProfile Footstep => _footstep;
+
         public float TrailSpacing => _trailSpacing;
         public int MaxDots => _maxDots;
         public float DotRadius => _dotRadius;
         public int MaxBounces => _maxBounces;
-        public Color DotColor => _dotColor;
 
-        public int FootstepDirectionCount => _footstepDirectionCount;
-        public int FootstepTrailDots => _footstepTrailDots;
         public float StepLength => _stepLength;
         public float StepInterval => _stepInterval;
         public float GhostFadeTime => _ghostFadeTime;
         public float FootSize => _footSize;
-
-        /// <summary>近似可视半径 = speed × lifetime（直线，未计反射）。</summary>
-        public float VisualRadius => _speed * _lifetime;
+        public float BreathDuration => _breathDuration;
+        public float BreathRecovery => _breathRecovery;
     }
 }

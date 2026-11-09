@@ -38,6 +38,12 @@ namespace Collection.Runtime.Enemy
         /// <summary>致命接触距离（m）。</summary>
         public float KillDistance => _settings != null ? _settings.KillDistance : 0.55f;
 
+        /// <summary>敌人参数（只读），供反馈层读取提示范围等。</summary>
+        public EnemySettings Settings => _settings;
+
+        /// <summary>直线追击速度（m/s），用于预测“还有多久被抓”。</summary>
+        public float MoveSpeed => _settings != null ? _settings.MoveSpeed : 2.5f;
+
         /// <summary>GameOver 时停住：清速度并停掉状态机。</summary>
         public void Stop()
         {
@@ -162,7 +168,9 @@ namespace Collection.Runtime.Enemy
             if (LastSeekSeconds > MaxSeekSeconds) MaxSeekSeconds = LastSeekSeconds;
             CampCount++;
 
-            Debug.Log($"[Enemy] Seek→Camp 到达 ({_target.x:0.00},{_target.y:0.00})，用时 {LastSeekSeconds:0.00} s");
+            Debug.Log(
+                $"[Enemy] t={Time.time:0.00} Seek→Camp 到达 ({_target.x:0.00},{_target.y:0.00})，" +
+                $"用时 {LastSeekSeconds:0.00} s，驻留直到下一次听到声音");
         }
     }
 }

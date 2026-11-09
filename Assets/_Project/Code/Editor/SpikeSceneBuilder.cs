@@ -1,9 +1,11 @@
 using System.IO;
 using Collection.Runtime.Diagnostics;
 using Collection.Runtime.Enemy;
+using Collection.Runtime.Feedback;
 using Collection.Runtime.Flow;
 using Collection.Runtime.Player;
 using Collection.Runtime.Ripple;
+using TMPro;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
@@ -19,6 +21,8 @@ namespace Collection.EditorTools
     public static class SpikeSceneBuilder
     {
         private const string ScenePath = "Assets/_Project/Scenes/SC_Spike.unity";
+        private const string CorridorPath = "Assets/_Project/Scenes/SC_Corridor.unity";
+        private const string Level01Path = "Assets/_Project/Scenes/SC_Level01.unity";
         private const string ArtFolder = "Assets/_Project/Art";
         private const string DataFolder = "Assets/_Project/Data";
         private const string SpritePath = ArtFolder + "/Sprite_White.png";
@@ -26,6 +30,21 @@ namespace Collection.EditorTools
         private const string MaterialPath = ArtFolder + "/Mat_SpikeSprite.mat";
         private const string SettingsPath = DataFolder + "/SO_Ripple_A.asset";
         private const string SettingsBPath = DataFolder + "/SO_Ripple_B.asset";
+        private const string SettingsV2Path = DataFolder + "/SO_Ripple_V2.asset";
+        private const string NarrativePath = DataFolder + "/SO_Narrative_Ch1.asset";
+        private const string WorldTextsPath = DataFolder + "/SO_WorldTexts_Ch1.asset";
+        private const string FontAssetPath = "Assets/_Project/Art/Font/font1716_TMP.asset";
+
+        // 首段叙事（hook）：黑暗 → 出声显形 → 唱歌的来处 → “但是”
+        private static readonly string[] Chapter1Lines =
+        {
+            "睁开眼，四周是纯粹的黑暗。",
+            "她试着出声——声音划开黑暗，露出一小圈地面。",
+            "从前，唱歌是她唯一确定自己存在的方式。",
+            "父母说：唱吧，你喜欢就好。",
+            "于是她一路唱进了艺术学校。",
+            "但是……",
+        };
         private const string EnemySettingsPath = DataFolder + "/SO_Enemy.asset";
 
         private const int SortingWalls = 0;
@@ -54,6 +73,260 @@ namespace Collection.EditorTools
         [MenuItem("Collection/Spike/Rebuild SC_Spike Scene", priority = 1)]
         public static void RebuildScene()
         {
+            BuildScene(ScenePath, new Vector2(0f, 0f), 6.5f, Walls,
+                new Vector2(-2.5f, -2.5f), new Vector2(3f, -2f), "Room");
+        }
+
+        // D2 验收用：3 m 宽、20 m 长的直廊（净宽 3 m，墙厚 0.5 m）
+        private static readonly (string Name, Vector2 Center, Vector2 Size)[] CorridorWalls =
+        {
+            ("Wall_Bottom", new Vector2(0f, -1.75f), new Vector2(21f, 0.5f)),
+            ("Wall_Top", new Vector2(0f, 1.75f), new Vector2(21f, 0.5f)),
+            ("Wall_Left", new Vector2(-10.25f, 0f), new Vector2(0.5f, 4f)),
+            ("Wall_Right", new Vector2(10.25f, 0f), new Vector2(0.5f, 4f)),
+        };
+
+        [MenuItem("Collection/Spike/Rebuild SC_Corridor Scene", priority = 2)]
+        public static void RebuildCorridorScene()
+        {
+            BuildScene(CorridorPath, new Vector2(-2f, 0f), 3f, CorridorWalls,
+                new Vector2(-4f, 0f), new Vector2(0f, 0f), "Corridor");
+        }
+
+        // D-4/D-5：第一章连续通路（净宽 3.5 m，纵向起伏 ±1.5 m，全程约 133 m）
+        // rects 为“可走区域”，墙体由网格自动生成，避免手写几十面墙
+        private static readonly (Vector2 Min, Vector2 Max)[] Level01Rects =
+        {
+            (new Vector2(0f, -1.75f), new Vector2(27.75f, 1.75f)),
+            (new Vector2(24.25f, -1.75f), new Vector2(27.75f, 3.25f)),
+            (new Vector2(24.25f, -0.6f), new Vector2(53.75f, 3.1f)),
+            (new Vector2(50.25f, -3.25f), new Vector2(53.75f, 3.25f)),
+            (new Vector2(50.25f, -3.1f), new Vector2(79.75f, 0.6f)),
+            (new Vector2(76.25f, -3.25f), new Vector2(79.75f, 2.75f)),
+            (new Vector2(76.25f, -0.75f), new Vector2(106.75f, 2.75f)),
+            (new Vector2(103.25f, -1.75f), new Vector2(106.75f, 2.75f)),
+            (new Vector2(103.25f, -1.75f), new Vector2(128f, 1.75f)),
+        };
+
+        [MenuItem("Collection/Spike/Rebuild SC_Level01 Scene", priority = 3)]
+        public static void RebuildLevel01Scene()
+        {
+            (string, Vector2, Vector2)[] walls = BuildWallsFromRects(Level01Rects, out bool[,] walkable,
+                out float originX, out float originY, out int nx, out int ny);
+
+            // 起点 (2,0) → 终点门 (126,0)：网格洪泛验证连通性
+            int startX = Mathf.FloorToInt((2f - originX) / GridCell);
+            int startY = Mathf.FloorToInt((0f - originY) / GridCell);
+            int goalX = Mathf.FloorToInt((126f - originX) / GridCell);
+            int goalY = Mathf.FloorToInt((0f - originY) / GridCell);
+            int distance = FloodFill(walkable, nx, ny, startX, startY, goalX, goalY);
+            float pathMeters = distance * GridCell;
+
+            Debug.Log(distance < 0
+                ? "[Level01] 连通性检查失败：起点到终点不可达"
+                : $"[Level01] 连通性检查通过：起点→终点 {distance} 格 ≈ {pathMeters:0.0} m，生成 {walls.Length} 面墙");
+
+            BuildScene(Level01Path, new Vector2(2f, 0f), 3f, walls,
+                new Vector2(2f, 0f), new Vector2(60f, -1.5f), "Level01",
+                followCamera: true, goalPosition: new Vector2(126f, 0f),
+                checkpointPositions: new[]
+                {
+                    new Vector2(30f, 1.25f),
+                    new Vector2(55f, -1.25f),
+                    new Vector2(95f, 1.0f),
+                },
+                narrative: EnsureNarrativeChapter1(),
+                worldTexts: EnsureWorldTextsChapter1());
+        }
+
+        private const float GridCell = 0.5f;
+        private const float WallThickness = 0.5f;
+
+        /// <summary>把“可走矩形”的并集边界生成为墙体（外侧 0.5 m 厚），并返回可走网格。</summary>
+        private static (string Name, Vector2 Center, Vector2 Size)[] BuildWallsFromRects(
+            (Vector2 Min, Vector2 Max)[] rects, out bool[,] walkable,
+            out float originX, out float originY, out int nx, out int ny)
+        {
+            float minX = float.MaxValue, minY = float.MaxValue, maxX = float.MinValue, maxY = float.MinValue;
+            foreach (var rect in rects)
+            {
+                minX = Mathf.Min(minX, rect.Min.x);
+                minY = Mathf.Min(minY, rect.Min.y);
+                maxX = Mathf.Max(maxX, rect.Max.x);
+                maxY = Mathf.Max(maxY, rect.Max.y);
+            }
+
+            originX = minX - GridCell;
+            originY = minY - GridCell;
+            nx = Mathf.CeilToInt((maxX - originX) / GridCell) + 1;
+            ny = Mathf.CeilToInt((maxY - originY) / GridCell) + 1;
+
+            walkable = new bool[nx, ny];
+            for (int i = 0; i < nx; i++)
+            {
+                for (int j = 0; j < ny; j++)
+                {
+                    var center = new Vector2(originX + (i + 0.5f) * GridCell, originY + (j + 0.5f) * GridCell);
+                    foreach (var rect in rects)
+                    {
+                        if (center.x < rect.Min.x || center.x > rect.Max.x) continue;
+                        if (center.y < rect.Min.y || center.y > rect.Max.y) continue;
+                        walkable[i, j] = true;
+                        break;
+                    }
+                }
+            }
+
+            var walls = new System.Collections.Generic.List<(string, Vector2, Vector2)>();
+
+            // 水平边（沿 X 的墙）
+            for (int j = 0; j <= ny; j++)
+            {
+                int i = 0;
+                while (i < nx)
+                {
+                    bool below = j > 0 && walkable[i, j - 1];
+                    bool above = j < ny && walkable[i, j];
+                    if (below == above) { i++; continue; }
+
+                    int start = i;
+                    while (i < nx && ((j > 0 && walkable[i, j - 1]) != (j < ny && walkable[i, j]))) i++;
+
+                    float x0 = originX + start * GridCell;
+                    float x1 = originX + i * GridCell;
+                    float y = originY + j * GridCell + (below ? WallThickness * 0.5f : -WallThickness * 0.5f);
+
+                    walls.Add(($"Wall_H_{walls.Count:00}", new Vector2((x0 + x1) * 0.5f, y),
+                        new Vector2(x1 - x0, WallThickness)));
+                }
+            }
+
+            // 垂直边（沿 Y 的墙）
+            for (int i = 0; i <= nx; i++)
+            {
+                int j = 0;
+                while (j < ny)
+                {
+                    bool left = i > 0 && walkable[i - 1, j];
+                    bool right = i < nx && walkable[i, j];
+                    if (left == right) { j++; continue; }
+
+                    int start = j;
+                    while (j < ny && ((i > 0 && walkable[i - 1, j]) != (i < nx && walkable[i, j]))) j++;
+
+                    float y0 = originY + start * GridCell;
+                    float y1 = originY + j * GridCell;
+                    float x = originX + i * GridCell + (left ? WallThickness * 0.5f : -WallThickness * 0.5f);
+
+                    walls.Add(($"Wall_V_{walls.Count:00}", new Vector2(x, (y0 + y1) * 0.5f),
+                        new Vector2(WallThickness, y1 - y0)));
+                }
+            }
+
+            // 柱子：0.5×0.5，每 20 m 不超过 2 根（D-5），同时充当反射点
+            Vector2[] pillars =
+            {
+                new Vector2(36f, 2.2f), new Vector2(46f, 2.2f),
+                new Vector2(64f, -2.2f), new Vector2(66f, -2.2f),
+                new Vector2(92f, 1.9f),
+            };
+            foreach (Vector2 pillar in pillars)
+            {
+                walls.Add(($"Pillar_{walls.Count:00}", pillar, new Vector2(0.5f, 0.5f)));
+            }
+
+            return walls.ToArray();
+        }
+
+        private static int FloodFill(bool[,] walkable, int nx, int ny, int sx, int sy, int gx, int gy)
+        {
+            if (sx < 0 || sy < 0 || gx < 0 || gy < 0 || sx >= nx || sy >= ny || gx >= nx || gy >= ny) return -1;
+            if (!walkable[sx, sy] || !walkable[gx, gy]) return -1;
+
+            var distance = new int[nx, ny];
+            for (int i = 0; i < nx; i++)
+                for (int j = 0; j < ny; j++)
+                    distance[i, j] = -1;
+
+            var queue = new System.Collections.Generic.Queue<(int, int)>();
+            distance[sx, sy] = 0;
+            queue.Enqueue((sx, sy));
+
+            while (queue.Count > 0)
+            {
+                (int x, int y) = queue.Dequeue();
+                if (x == gx && y == gy) return distance[x, y];
+
+                for (int d = 0; d < 4; d++)
+                {
+                    int nxx = x + (d == 0 ? 1 : d == 1 ? -1 : 0);
+                    int nyy = y + (d == 2 ? 1 : d == 3 ? -1 : 0);
+                    if (nxx < 0 || nyy < 0 || nxx >= nx || nyy >= ny) continue;
+                    if (!walkable[nxx, nyy] || distance[nxx, nyy] >= 0) continue;
+
+                    distance[nxx, nyy] = distance[x, y] + 1;
+                    queue.Enqueue((nxx, nyy));
+                }
+            }
+
+            return -1;
+        }
+
+        private static void CreateGoal(Vector2 position, PlayerController player, Sprite sprite, Material material)
+        {
+            var go = new GameObject("FinishDoor");
+            go.transform.position = new Vector3(position.x, position.y, 0f);
+
+            // 视觉：门体 0.6 × 2.4
+            var visualGo = new GameObject("DoorVisual");
+            visualGo.transform.SetParent(go.transform, false);
+            visualGo.transform.localScale = new Vector3(0.6f, 2.4f, 1f);
+            var renderer = visualGo.AddComponent<SpriteRenderer>();
+            renderer.sprite = sprite;
+            renderer.sharedMaterial = material;
+            renderer.color = new Color(0.62f, 0.9f, 1f, 1f);
+            renderer.sortingOrder = 5;
+
+            // 判定：矩形 Trigger 1.6 × 2.4
+            var trigger = go.AddComponent<BoxCollider2D>();
+            trigger.isTrigger = true;
+            trigger.size = new Vector2(1.6f, 2.4f);
+
+            var goal = go.AddComponent<ChapterGoal>();
+            goal.Initialize(player);
+        }
+
+        private static void CreateCheckpoint(Vector2 position, int index, PlayerController player, SpikeFlow flow,
+            Sprite sprite, Material material)
+        {
+            var go = new GameObject($"Checkpoint_{index}");
+            go.transform.position = new Vector3(position.x, position.y, 0f);
+
+            // 视觉：0.6 × 0.6 黄色方块
+            var visualGo = new GameObject("CheckpointVisual");
+            visualGo.transform.SetParent(go.transform, false);
+            visualGo.transform.localScale = new Vector3(0.6f, 0.6f, 1f);
+            var renderer = visualGo.AddComponent<SpriteRenderer>();
+            renderer.sprite = sprite;
+            renderer.sharedMaterial = material;
+            renderer.color = new Color(0.85f, 0.75f, 0.25f, 0.55f);
+            renderer.sortingOrder = 4;
+
+            // 判定：覆盖整个走廊断面的矩形 Trigger
+            var trigger = go.AddComponent<BoxCollider2D>();
+            trigger.isTrigger = true;
+            trigger.size = new Vector2(3.2f, 5f);
+
+            var checkpoint = go.AddComponent<Checkpoint>();
+            checkpoint.Initialize(player, flow, renderer, index);
+        }
+
+        private static void BuildScene(string scenePath, Vector2 cameraPosition, float cameraSize,
+            (string Name, Vector2 Center, Vector2 Size)[] walls, Vector2 playerSpawn, Vector2 enemySpawn,
+            string worldName, bool followCamera = false, Vector2? goalPosition = null,
+            Vector2[] checkpointPositions = null, NarrativeSettings narrative = null,
+            WorldTextSettings worldTexts = null)
+        {
             Scene active = EditorSceneManager.GetActiveScene();
             if (active.isDirty)
             {
@@ -70,7 +343,8 @@ namespace Collection.EditorTools
             Sprite sprite = EnsureWhiteSprite();
             Sprite circle = EnsureCircleSprite();
             Material material = EnsureSpriteMaterial();
-            RippleSettings settings = EnsureRippleSettings();
+            RippleSettings settings = EnsureRippleSettingsV2();
+            EnsureRippleSettings();
             EnsureRippleSettingsB();
 
             if (sprite == null || circle == null || material == null || settings == null)
@@ -82,22 +356,22 @@ namespace Collection.EditorTools
             // Scene.name 只读，场景名由保存路径决定
             Scene scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
 
-            CreateCamera();
+            Camera camera = CreateCamera(cameraPosition, cameraSize);
 
-            var roomGo = new GameObject("Room");
-            foreach (var wall in Walls)
+            var worldGo = new GameObject(worldName);
+            foreach (var wall in walls)
             {
-                CreateWall(roomGo.transform, wall.Name, wall.Center, wall.Size, sprite, material);
+                CreateWall(worldGo.transform, wall.Name, wall.Center, wall.Size, sprite, material);
             }
 
             var rippleGo = new GameObject("RippleSystem");
             var dotRoot = new GameObject("Dots");
             dotRoot.transform.SetParent(rippleGo.transform, false);
             var ripple = rippleGo.AddComponent<RippleSystem>();
-            ripple.Initialize(settings, roomGo.transform, dotRoot.transform, circle, material);
+            ripple.Initialize(settings, worldGo.transform, dotRoot.transform, circle, material);
 
             var playerGo = new GameObject("Player");
-            playerGo.transform.position = new Vector3(-2.5f, -2.5f, 0f);
+            playerGo.transform.position = playerSpawn;
             var player = CreatePlayer(playerGo, sprite, material);
 
             // 一步一印：本体始终是双脚中的一只，另一只是上一步的残影。
@@ -106,8 +380,22 @@ namespace Collection.EditorTools
             Transform leftFoot = CreateFoot(feetRoot.transform, "Foot_Left", sprite, material, settings);
             Transform rightFoot = CreateFoot(feetRoot.transform, "Foot_Right", sprite, material, settings);
             var stepper = playerGo.AddComponent<FootStepper>();
-            stepper.Initialize(ripple, settings, roomGo.transform, leftFoot, rightFoot, sprite, material);
+            stepper.Initialize(ripple, settings, worldGo.transform, leftFoot, rightFoot, sprite, material);
             player.Initialize(ripple, stepper);
+
+            // 资产引用可能在构建过程中被 AssetDatabase 重新加载（变成“假 null”），用前按路径重解析
+            if (worldTexts == null) worldTexts = AssetDatabase.LoadAssetAtPath<WorldTextSettings>(WorldTextsPath);
+            if (worldTexts != null)
+            {
+                CreateWorldTexts(worldTexts, player, camera);
+            }
+
+            if (followCamera)
+            {
+                var follow = camera.gameObject.AddComponent<CameraFollow>();
+                follow.Initialize(playerGo.transform, cameraPosition.y,
+                    followY: true, deadzone: 0.6f, yClamp: new Vector2(-1.5f, 1.5f));
+            }
 
             // 敌人：只靠听，碰到涟漪点就奔向声源
             EnemySettings enemySettings = EnsureEnemySettings();
@@ -118,44 +406,69 @@ namespace Collection.EditorTools
             }
 
             var enemyGo = new GameObject("Enemy");
-            enemyGo.transform.position = new Vector3(3f, -2f, 0f);
+            enemyGo.transform.position = enemySpawn;
             var enemy = CreateEnemy(enemyGo, sprite, material);
             enemy.Initialize(ripple, enemySettings);
 
-            // 失败循环：接触 → GameOver 覆盖层 → 重试回到房间入口
+            // 失败循环：接触 → GameOver 覆盖层 → 重试回到入口
             var flowGo = new GameObject("GameFlow");
             var flow = flowGo.AddComponent<SpikeFlow>();
-            flow.Initialize(player, stepper, enemy, ripple,
-                new Vector2(-2.5f, -2.5f), new Vector2(3f, -2f));
+            flow.Initialize(player, stepper, enemy, ripple, playerSpawn, enemySpawn);
+
+            if (goalPosition.HasValue)
+            {
+                CreateGoal(goalPosition.Value, player, sprite, material);
+            }
+
+            if (narrative == null) narrative = AssetDatabase.LoadAssetAtPath<NarrativeSettings>(NarrativePath);
+            if (narrative != null)
+            {
+                var narrativeGo = new GameObject("Narrative");
+                var intro = narrativeGo.AddComponent<NarrativeIntro>();
+                intro.Initialize(narrative);
+            }
+
+            if (checkpointPositions != null)
+            {
+                for (int i = 0; i < checkpointPositions.Length; i++)
+                {
+                    CreateCheckpoint(checkpointPositions[i], i, player, flow, sprite, material);
+                }
+            }
+
+            // D-3 接近脉冲：屏幕边缘提示，不给方向
+            var pulse = rippleGo.AddComponent<ProximityPulse>();
+            pulse.Initialize(enemy, player);
 
             var hud = rippleGo.AddComponent<SpikeHud>();
-            hud.Initialize(ripple, player, stepper, enemy);
+            hud.Initialize(ripple, player, stepper, enemy, pulse, flow);
 
             EditorSceneManager.MarkSceneDirty(scene);
-            if (!EditorSceneManager.SaveScene(scene, ScenePath))
+            if (!EditorSceneManager.SaveScene(scene, scenePath))
             {
-                Debug.LogError($"[SpikeSceneBuilder] 保存场景失败：{ScenePath}");
+                Debug.LogError($"[SpikeSceneBuilder] 保存场景失败：{scenePath}");
                 return;
             }
 
             AssetDatabase.SaveAssets();
 
             Debug.Log(
-                $"[SpikeSceneBuilder] 已生成 {ScenePath}：{Walls.Length} 面墙，" +
-                $"参数 {settings.Speed} m/s × {settings.Lifetime} s（半径≈{settings.VisualRadius} m），" +
-                $"{settings.DirectionCount} 方向 × {settings.TrailDots} 尾迹点，上限 {settings.MaxDots}。" +
+                $"[SpikeSceneBuilder] 已生成 {scenePath}：{walls.Length} 面墙，" +
+                $"唱歌 {settings.Voice.Speed} m/s × {settings.Voice.Lifetime} s（半径≈{settings.Voice.VisualRadius} m，" +
+                $"{settings.Voice.DirectionCount} 方向 × {settings.Voice.TrailDots} 尾迹，冷却 {settings.Voice.Cooldown} s）；" +
+                $"落脚 {settings.Footstep.DirectionCount} 方向 × {settings.Footstep.TrailDots} 尾迹，上限 {settings.MaxDots}。" +
                 $"墙体 sprite={sprite.name}，尾迹 sprite={circle.name}（ppu={circle.pixelsPerUnit}）。");
         }
 
-        private static void CreateCamera()
+        private static Camera CreateCamera(Vector2 position, float orthographicSize)
         {
             var cameraGo = new GameObject("Main Camera");
             cameraGo.tag = "MainCamera";
-            cameraGo.transform.position = new Vector3(0f, 0f, -10f);
+            cameraGo.transform.position = new Vector3(position.x, position.y, -10f);
 
             var camera = cameraGo.AddComponent<Camera>();
             camera.orthographic = true;
-            camera.orthographicSize = 6.5f;
+            camera.orthographicSize = orthographicSize;
             camera.clearFlags = CameraClearFlags.SolidColor;
             camera.backgroundColor = new Color(0.02f, 0.02f, 0.03f, 1f);
             camera.nearClipPlane = 0.1f;
@@ -163,6 +476,7 @@ namespace Collection.EditorTools
 
             // URP 下相机需要额外的相机数据组件，缺失时由该扩展方法补上
             camera.GetUniversalAdditionalCameraData();
+            return camera;
         }
 
         private static void CreateWall(Transform parent, string name, Vector2 center, Vector2 size,
@@ -334,6 +648,15 @@ namespace Collection.EditorTools
             return CreateRippleProfile(SettingsBPath, 3f, 2.5f);
         }
 
+        /// <summary>v2（D-1 决定）：3 m/s × 1.2 s（≈3.6 m）。</summary>
+        private static RippleSettings EnsureRippleSettingsV2()
+        {
+            var existing = AssetDatabase.LoadAssetAtPath<RippleSettings>(SettingsV2Path);
+            if (existing != null) return existing;
+
+            return CreateRippleProfile(SettingsV2Path, 3f, 1.2f);
+        }
+
         private static RippleSettings CreateRippleProfile(string path, float speed, float lifetime)
         {
             var settings = ScriptableObject.CreateInstance<RippleSettings>();
@@ -343,6 +666,117 @@ namespace Collection.EditorTools
             serialized.FindProperty("_speed").floatValue = speed;
             serialized.FindProperty("_lifetime").floatValue = lifetime;
             serialized.ApplyModifiedPropertiesWithoutUndo();
+
+            return settings;
+        }
+
+        /// <summary>章节世界文本（V3+V6 验证用：玩家经过 x=8 时浮现一句）.</summary>
+        private static WorldTextSettings EnsureWorldTextsChapter1()
+        {
+            // 内容以 SO 为准：只在资源不存在时写入默认条目，之后由策划在 Inspector 里编辑
+            var existing = AssetDatabase.LoadAssetAtPath<WorldTextSettings>(WorldTextsPath);
+            if (existing != null) return existing;
+
+            var settings = ScriptableObject.CreateInstance<WorldTextSettings>();
+            settings.SetEntries(new[]
+            {
+                new WorldTextSettings.Entry
+                {
+                    TextPosition = new Vector2(8f, 1.6f),
+                    TriggerCenter = new Vector2(8f, 0f),
+                    TriggerSize = new Vector2(4f, 4f),
+                    Width = 7f,
+                    Text = "声音是<wave>唯一</wave>能<color=#7fd4ff>照亮</color>这里的东西。",
+                },
+            });
+
+            AssetDatabase.CreateAsset(settings, WorldTextsPath);
+            return settings;
+        }
+
+        /// <summary>把 SO 里的每条文本生成为世界空间 TMP + 触发区。</summary>
+        private static void CreateWorldTexts(WorldTextSettings settings, PlayerController player, Camera camera)
+        {
+            var fontAsset = AssetDatabase.LoadAssetAtPath<TMP_FontAsset>(FontAssetPath);
+            if (fontAsset == null)
+            {
+                Debug.LogError($"[SpikeSceneBuilder] 找不到 TMP 字体资产：{FontAssetPath}");
+                return;
+            }
+
+            const float scale = 0.005f;
+
+            for (int i = 0; i < settings.Entries.Length; i++)
+            {
+                WorldTextSettings.Entry entry = settings.Entries[i];
+
+                var root = new GameObject($"WorldText_{i}");
+                root.transform.position = new Vector3(entry.TriggerCenter.x, entry.TriggerCenter.y, 0f);
+
+                var trigger = root.AddComponent<BoxCollider2D>();
+                trigger.isTrigger = true;
+                trigger.size = entry.TriggerSize;
+
+                var canvasGo = new GameObject("Canvas", typeof(Canvas), typeof(CanvasGroup));
+                canvasGo.transform.SetParent(root.transform, false);
+                canvasGo.transform.position = new Vector3(entry.TextPosition.x, entry.TextPosition.y, -1f);
+                canvasGo.transform.localScale = Vector3.one * scale;
+
+                var canvas = canvasGo.GetComponent<Canvas>();
+                canvas.renderMode = RenderMode.WorldSpace;
+                canvas.worldCamera = camera;
+
+                var rectTransform = canvasGo.GetComponent<RectTransform>();
+                rectTransform.sizeDelta = new Vector2(entry.Width / scale, 320f);
+
+                var textGo = new GameObject("Text", typeof(RectTransform));
+                textGo.transform.SetParent(canvasGo.transform, false);
+
+                var tmp = textGo.AddComponent<TextMeshProUGUI>();
+                tmp.font = fontAsset;
+                tmp.fontSize = 56f;
+                tmp.color = Color.white;
+                tmp.alignment = TextAlignmentOptions.Center;
+                tmp.text = entry.Text;
+
+                var textRect = textGo.GetComponent<RectTransform>();
+                textRect.sizeDelta = rectTransform.sizeDelta;
+                textRect.anchoredPosition = Vector2.zero;
+
+                var group = canvasGo.GetComponent<CanvasGroup>();
+                var worldText = root.AddComponent<WorldText>();
+                worldText.Initialize(player, tmp, group, entry.Text,
+                    settings.CharsPerSecond, settings.PunctuationPause,
+                    settings.WaveEnabled, settings.WaveAmplitudePercent,
+                    settings.WaveFrequency, settings.WavePhaseStep);
+            }
+        }
+
+        /// <summary>首段叙事文本资源（≤150 字）。</summary>
+        private static NarrativeSettings EnsureNarrativeChapter1()
+        {
+            var existing = AssetDatabase.LoadAssetAtPath<NarrativeSettings>(NarrativePath);
+            if (existing != null) return existing;
+
+            var settings = ScriptableObject.CreateInstance<NarrativeSettings>();
+            AssetDatabase.CreateAsset(settings, NarrativePath);
+
+            var serialized = new SerializedObject(settings);
+            SerializedProperty lines = serialized.FindProperty("_lines");
+            lines.arraySize = Chapter1Lines.Length;
+            for (int i = 0; i < Chapter1Lines.Length; i++)
+            {
+                lines.GetArrayElementAtIndex(i).stringValue = Chapter1Lines[i];
+            }
+
+            serialized.FindProperty("_lineDuration").floatValue = 3f;
+            serialized.FindProperty("_fadeTime").floatValue = 0.4f;
+            serialized.FindProperty("_startDelay").floatValue = 1f;
+            serialized.ApplyModifiedPropertiesWithoutUndo();
+
+            int total = 0;
+            foreach (string line in Chapter1Lines) total += line.Length;
+            Debug.Log($"[Narrative] 生成 {NarrativePath}：{Chapter1Lines.Length} 行，共 {total} 字（上限 150）");
 
             return settings;
         }

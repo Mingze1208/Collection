@@ -20,6 +20,19 @@ namespace Collection.Runtime.Enemy
         [Tooltip("新声源与当前目标相距超过该值才改向，避免同一个声音反复重置。")]
         [SerializeField, Min(0f)] private float _retargetDistance = 0.3f;
 
+        [Header("接近提示（D-3）")]
+        [Tooltip("敌人处于 Seek/Camp 且距离 ≤ 该值时，屏幕边缘出现脉冲（m）。")]
+        [SerializeField, Min(0.5f)] private float _pulseRange = 6f;
+
+        [Tooltip("脉冲最慢频率（Hz，在范围边缘）。")]
+        [SerializeField, Min(0.1f)] private float _pulseSlowHz = 0.8f;
+
+        [Tooltip("脉冲最快频率（Hz，贴身时）。")]
+        [SerializeField, Min(0.1f)] private float _pulseFastHz = 3f;
+
+        [Tooltip("预计被抓前多少秒闪红一次（s）。")]
+        [SerializeField, Min(0.05f)] private float _flashLeadTime = 0.3f;
+
         [Header("致命接触")]
         [Tooltip("敌人与玩家中心距离小于该值即判定 GameOver（约等于两者半径之和）。")]
         [SerializeField, Min(0.05f)] private float _killDistance = 0.55f;
@@ -36,6 +49,10 @@ namespace Collection.Runtime.Enemy
         public float SenseRadius => _senseRadius;
         public float RetargetDistance => _retargetDistance;
         public float KillDistance => _killDistance;
+        public float PulseRange => _pulseRange;
+        public float PulseSlowHz => _pulseSlowHz;
+        public float PulseFastHz => _pulseFastHz;
+        public float FlashLeadTime => _flashLeadTime;
         public float StuckCheckInterval => _stuckCheckInterval;
         public float StuckMoveThreshold => _stuckMoveThreshold;
     }

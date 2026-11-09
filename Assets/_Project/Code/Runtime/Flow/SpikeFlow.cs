@@ -39,7 +39,28 @@ namespace Collection.Runtime.Flow
 
         public string MenuNotice { get; private set; } = string.Empty;
 
+        /// <summary>当前复活点（默认章节起点，经过检查点后更新）。</summary>
+        public Vector2 RespawnPoint => _respawnPoint;
+
+        /// <summary>当前生效的检查点序号（-1 = 章节起点）。</summary>
+        public int CheckpointIndex => _checkpointIndex;
+
+        /// <summary>
+        /// 设置复活点：只允许“更靠后的检查点”覆盖，避免回头踩旧检查点把进度退回去。
+        /// 死亡与重试不会重置检查点。
+        /// </summary>
+        public bool SetCheckpoint(Vector2 position, int index)
+        {
+            if (index <= _checkpointIndex) return false;
+
+            _respawnPoint = position;
+            _checkpointIndex = index;
+            return true;
+        }
+
         private float _deathRealtime;
+        private Vector2 _respawnPoint;
+        private int _checkpointIndex = -1;
         private float _playerRadius = 0.3f;
         private float _enemyRadius = 0.3f;
 
@@ -56,6 +77,7 @@ namespace Collection.Runtime.Flow
             _ripple = ripple;
             _playerSpawn = playerSpawn;
             _enemySpawn = enemySpawn;
+            _respawnPoint = playerSpawn;
 
             _playerRadius = RadiusOf(player != null ? player.GetComponent<Collider2D>() : null);
             _enemyRadius = RadiusOf(enemy != null ? enemy.GetComponent<Collider2D>() : null);
@@ -65,6 +87,12 @@ namespace Collection.Runtime.Flow
         {
             if (collider == null) return 0.3f;
             return Mathf.Max(0.05f, collider.bounds.extents.x);
+        }
+
+        private void Awake()
+        {
+            // _respawnPoint 不参与序列化，进入运行时必须从起点初始化
+            _respawnPoint = _playerSpawn;
         }
 
         private void Update()
@@ -134,7 +162,7 @@ namespace Collection.Runtime.Flow
 
             if (_player != null)
             {
-                _player.Teleport(_playerSpawn);
+                _player.Teleport(_respawnPoint);
                 _player.SetInputEnabled(true);
             }
 
@@ -147,7 +175,7 @@ namespace Collection.Runtime.Flow
             RetryCostMs = (Time.realtimeSinceStartup - start) * 1000f;
 
             Debug.Log(
-                $"[Flow] Retry #{RetryCount}：玩家 → ({_playerSpawn.x:0.00},{_playerSpawn.y:0.00})，" +
+                $"[Flow] Retry #{RetryCount}：玩家 → ({_respawnPoint.x:0.00},{_respawnPoint.y:0.00})，" +
                 $"敌人 → ({_enemySpawn.x:0.00},{_enemySpawn.y:0.00})；" +
                 $"覆盖层停留 {OverlayDwellMs:0.0} ms，重试生效 {RetryCostMs:0.00} ms");
         }

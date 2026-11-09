@@ -40,6 +40,9 @@ namespace Collection.Runtime.Player
         public int LeftSteps { get; private set; }
         public int RightSteps { get; private set; }
 
+        /// <summary>静步次数（屏息状态下迈出、且不发声音的步数）。</summary>
+        public int SilentSteps { get; private set; }
+
         /// <summary>被墙挡住、没能迈出去的次数。</summary>
         public int BlockedCount { get; private set; }
 
@@ -125,8 +128,8 @@ namespace Collection.Runtime.Player
             if (left != null) left.color = _bodyColor;
         }
 
-        /// <summary>朝 direction 迈一步。被挡住或距离不足时返回 false。</summary>
-        public bool TryStep(Vector2 direction)
+        /// <summary>朝 direction 迈一步。silent = 屏息静步：不发声。被挡住或距离不足时返回 false。</summary>
+        public bool TryStep(Vector2 direction, bool silent = false)
         {
             if (_settings == null) return false;
             if (direction.sqrMagnitude < 0.01f) return false;
@@ -165,13 +168,17 @@ namespace Collection.Runtime.Player
             if (nextSide == 0) LeftSteps++;
             else RightSteps++;
 
-            if (_ripple != null)
+            if (silent)
+            {
+                SilentSteps++;
+            }
+            else if (_ripple != null)
             {
                 _ripple.Emit(destination, RippleSource.Footstep);
                 LastOriginError = Vector2.Distance(destination, _ripple.LastEmitOrigin);
             }
 
-            SpawnMarker(destination);
+            SpawnMarker(destination, silent);
             return true;
         }
 
@@ -225,13 +232,14 @@ namespace Collection.Runtime.Player
             return foot != null ? foot.GetComponent<SpriteRenderer>() : null;
         }
 
-        private void SpawnMarker(Vector2 position)
+        private void SpawnMarker(Vector2 position, bool silent)
         {
             SpriteRenderer marker = GetMarker();
 
             marker.transform.position = new Vector3(position.x, position.y, 0f);
             marker.transform.localScale = Vector3.one * 0.08f;
-            marker.color = new Color(0.2f, 1f, 0.6f, 1f);
+            // 绿 = 有声音的落脚；蓝 = 屏息静步（无声音）
+            marker.color = silent ? new Color(0.35f, 0.65f, 1f, 1f) : new Color(0.2f, 1f, 0.6f, 1f);
             marker.enabled = true;
         }
 

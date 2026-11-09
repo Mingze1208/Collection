@@ -24,6 +24,9 @@ namespace Collection.Runtime.Ripple
             public float StartTime;
             /// <summary>0 表示用设置里的默认尾迹点数；声束取证时覆盖为整条路径长度。</summary>
             public int TrailDots;
+            public float Speed = 3f;
+            public float Lifetime = 1.2f;
+            public Color Color = Color.white;
         }
 
         private readonly List<Aabb> _walls = new List<Aabb>();
@@ -37,6 +40,9 @@ namespace Collection.Runtime.Ripple
         public int ActiveDotCount => _dotPositions.Count;
         public int WallCount => _walls.Count;
         public IReadOnlyList<Vector2> DotPositions => _dotPositions;
+
+        /// <summary>墙体 AABB 列表（只读），供覆盖率等离线计算使用。</summary>
+        public IReadOnlyList<Aabb> Walls => _walls;
 
         /// <summary>最近一次发声的时刻（Time.time），供 HUD 显示“发声距今多久”。</summary>
         public float LastEmitTime { get; private set; } = float.NegativeInfinity;
@@ -95,15 +101,13 @@ namespace Collection.Runtime.Ripple
         {
             if (_settings == null) return;
 
-            bool footstep = source == RippleSource.Footstep;
-            int directions = footstep ? _settings.FootstepDirectionCount : _settings.DirectionCount;
-            int trailDots = footstep ? _settings.FootstepTrailDots : _settings.TrailDots;
+            RippleProfile profile = source == RippleSource.Footstep ? _settings.Footstep : _settings.Voice;
 
             var paths = RippleBurstBuilder.BuildRadial(
                 new Vec2(origin.x, origin.y),
-                directions,
-                _settings.Speed,
-                _settings.Lifetime,
+                profile.DirectionCount,
+                profile.Speed,
+                profile.Lifetime,
                 _walls,
                 _settings.MaxBounces);
 
@@ -112,7 +116,10 @@ namespace Collection.Runtime.Ripple
                 Paths = paths,
                 Source = origin,
                 StartTime = Time.time,
-                TrailDots = trailDots,
+                TrailDots = profile.TrailDots,
+                Speed = profile.Speed,
+                Lifetime = profile.Lifetime,
+                Color = profile.Color,
             });
 
             LastEmitTime = Time.time;
@@ -120,19 +127,22 @@ namespace Collection.Runtime.Ripple
             TrimToCapacity();
         }
 
+#if UNITY_EDITOR
         /// <summary>
-        /// 调试用：只沿一个方向发射一条声音点路径，用于截图取证“镜面反射”。
+        /// 调试用：只沿一个方向发射一条声音点路径，用于截图取证“镜面反射”。仅编辑器可用。
         /// 与径向发射同一套物理（同样的墙、速度、存活时间）。
         /// </summary>
         public void EmitBeam(Vector2 origin, Vector2 direction)
         {
             if (_settings == null) return;
 
+            RippleProfile profile = _settings.Voice;
+
             var path = RippleBurstBuilder.BuildPath(
                 new Vec2(origin.x, origin.y),
                 new Vec2(direction.x, direction.y),
-                _settings.Speed * _settings.Lifetime,
-                _settings.Speed,
+                profile.Speed * profile.Lifetime,
+                profile.Speed,
                 _walls,
                 _settings.MaxBounces);
 
@@ -143,11 +153,15 @@ namespace Collection.Runtime.Ripple
                 StartTime = Time.time,
                 // 尾迹覆盖整条路径，便于截图看出折返
                 TrailDots = Mathf.CeilToInt(path.Length / Mathf.Max(0.01f, _settings.TrailSpacing)) + 1,
+                Speed = profile.Speed,
+                Lifetime = profile.Lifetime,
+                Color = profile.Color,
             });
 
             LastEmitTime = Time.time;
             TrimToCapacity();
         }
+#endif
 
         public void Clear()
         {
@@ -192,8 +206,7 @@ namespace Collection.Runtime.Ripple
 
         private int DotCost(Burst burst)
         {
-            int trailDots = burst.TrailDots > 0 ? burst.TrailDots : _settings.TrailDots;
-            return burst.Paths.Length * trailDots;
+            return burst.Paths.Length * Mathf.Max(1, burst.TrailDots);
         }
 
         private void Update()
@@ -211,7 +224,7 @@ namespace Collection.Runtime.Ripple
 
             for (int i = _bursts.Count - 1; i >= 0; i--)
             {
-                if (now - _bursts[i].StartTime >= _settings.Lifetime) _bursts.RemoveAt(i);
+                if (now - _bursts[i].StartTime >= _bursts[i].Lifetime) _bursts.RemoveAt(i);
             }
 
             int used = 0;
@@ -222,14 +235,14 @@ namespace Collection.Runtime.Ripple
             {
                 Burst burst = _bursts[b];
                 float age = now - burst.StartTime;
-                float head = _settings.Speed * age;
+                float head = burst.Speed * age;
 
                 // 整次发声共用同一个收缩/变暗系数：所有圆一起从原尺寸缩到 0
-                float ageFade = 1f - Mathf.Clamp01(age / _settings.Lifetime);
+                float ageFade = 1f - Mathf.Clamp01(age / burst.Lifetime);
                 float dotScale = _settings.DotRadius * 2f * ageFade;
 
-                Color baseColor = _settings.DotColor;
-                int trailDots = burst.TrailDots > 0 ? burst.TrailDots : _settings.TrailDots;
+                Color baseColor = burst.Color;
+                int trailDots = Mathf.Max(1, burst.TrailDots);
 
                 for (int p = 0; p < burst.Paths.Length && used < cap; p++)
                 {
